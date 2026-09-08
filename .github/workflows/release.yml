@@ -22,8 +22,10 @@ jobs:
       - name: Build
         run: |
           mkdir -p dist
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/sounding-server-${{ matrix.os }}-${{ matrix.arch }} ./cmd/server
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/sounding-agent-${{ matrix.os }}-${{ matrix.arch }} ./cmd/agent
+          VERSION=${GITHUB_REF_NAME}
+          LDFLAGS="-s -w -X github.com/jacob-bytes/sounding/internal/version.Version=$VERSION -X github.com/jacob-bytes/sounding/internal/version.Commit=${GITHUB_SHA::7}"
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -ldflags="$LDFLAGS" -o dist/sounding-server-${{ matrix.os }}-${{ matrix.arch }} ./cmd/server
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} CGO_ENABLED=0 go build -ldflags="$LDFLAGS" -o dist/sounding-agent-${{ matrix.os }}-${{ matrix.arch }} ./cmd/agent
       - uses: actions/upload-artifact@v4
         with:
           name: binaries-${{ matrix.os }}-${{ matrix.arch }}

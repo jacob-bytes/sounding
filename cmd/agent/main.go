@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/jacob-bytes/sounding/internal/collect"
+	"github.com/jacob-bytes/sounding/internal/version"
 )
 
 func main() {
@@ -32,7 +33,12 @@ func main() {
 	interval := flag.Duration("interval", envOrDuration(envInterval, 15*time.Second), "采集周期（可用 $SOUNDING_INTERVAL）")
 	probeTargets := flag.String("probe", envOr(envProbe, ""), `本节点延迟测试目标（格式: "名称:主机,名称:主机"，如 "上海移动:223.5.5.5,腾讯 DNS:119.29.29.29"，可用 $SOUNDING_PROBES）`)
 	nodeUUID := flag.String("node-uuid", envOr(envUUID, ""), "节点 UUID（默认主机名；可用 $SOUNDING_NODE_UUID）")
+	showVersion := flag.Bool("version", false, "显示版本并退出")
 	flag.Parse()
+	if *showVersion {
+		log.Printf("sounding-agent %s", version.String())
+		return
+	}
 
 	// 热重载配置（flag/env 为初值；文件配置动态覆盖）
 	fc := LoadConfig(*configFile)

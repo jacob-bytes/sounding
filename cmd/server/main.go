@@ -16,12 +16,14 @@ import (
 	"github.com/jacob-bytes/sounding/internal/notify"
 	"github.com/jacob-bytes/sounding/internal/probe"
 	"github.com/jacob-bytes/sounding/internal/store"
+	"github.com/jacob-bytes/sounding/internal/version"
 )
 
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP 监听地址")
 	dbPath := flag.String("db", "sounding.db", "SQLite 数据库路径")
 	seed := flag.Bool("seed", true, "启动时写入演示数据")
+	showVersion := flag.Bool("version", false, "显示版本并退出")
 	agentToken := flag.String("agent-token", "sounding-demo-token", "Agent 上报认证 token")
 	probeClient := flag.String("probe-client", "demo-001", "探针记录挂载的 client uuid")
 	adminToken := flag.String("admin-token", "", "管理 API token（为空=不启用认证）")
@@ -45,6 +47,10 @@ func main() {
 	staticDir := flag.String("static", "", "前端静态目录（ink 构建产物——可选，提供管理后台）")
 	flag.Parse()
 
+	if *showVersion {
+		log.Printf("sounding-server %s", version.String())
+		return
+	}
 	st, err := store.Open(*dbPath)
 	if err != nil {
 		log.Fatalf("open store: %v", err)

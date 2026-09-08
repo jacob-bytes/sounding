@@ -183,22 +183,68 @@ go build -o sounding-server ./cmd/server
 | 健康检查 | `http://<主机>:8080/healthz` |
 | Agent 接入 | 各节点执行 `sounding-agent -server http://<主机>:8080 -token <agent-token>` |
 
-### systemd 示例
+### 方式四：systemd 服务（脚本一键生成）
+
+```bash
+# 安装二进制 + 生成并启用 systemd 服务
+SOUNDING_AGENT_TOKEN=xxx SOUNDING_ADMIN_TOKEN=yyy \
+  sh scripts/install.sh systemd server
+
+# Agent 节点
+SOUNDING_AGENT_SERVER=http://主控:8080 SOUNDING_AGENT_TOKEN=xxx \
+  sh scripts/install.sh systemd agent
+```
+
+脚本会：创建 `sounding` 系统用户 → 建 `/var/lib/sounding` → 写入 unit → `enable --now` → 打印状态。
+
+**运维命令**：
+```bash
+sudo systemctl status sounding-server     # 状态
+sudo journalctl -u sounding-server -f     # 日志
+sudo systemctl restart sounding-server    # 重启
+```
+
+<details><summary>手动 systemd unit（参考）</summary>
 
 ```ini
 [Unit]
 Description=sounding server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-ExecStart=/usr/local/bin/sounding-server -addr :8080 -db /var/lib/sounding/sounding.db \
-  -agent-token <agent-token> -admin-token <admin-token> -retain-days 30
-Restart=always
+Type=simple
 User=sounding
+ExecStart=/usr/local/bin/sounding-server -addr :8080 -db /var/lib/sounding/sounding.db \
+  -static /var/lib/sounding/admin -agent-token <agent-token> -admin-token <admin-token> -retain-days 30
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
 ```
+</details>
+
+### 更新
+
+```bash
+# 重跑安装命令即可（二进制替换，数据/配置/systemd 服务保持不变）
+sh scripts/install.sh update server     # 或 update agent
+sudo systemctl restart sounding-server  # systemd 部署需重启
+
+# 指定版本
+SOUNDING_VERSION=v0.3.0 sh scripts/install.sh update server
+
+# 查看当前版本
+sounding-server -version
+```
+
+| 部署方式 | 更新方式 |
+|---|---|
+| 二进制/systemd | `install.sh update <role>` + 重启服务 |
+| Docker | `docker pull ghcr.io/jacob-bytes/sounding:latest && docker restart sounding` |
+| 一键脚本 | 同上（脚本会自动对比版本并提示） |
 
 ## 配置手册
 
