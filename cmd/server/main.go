@@ -24,6 +24,9 @@ func main() {
 	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭告警）")
 	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
 	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
+	adminUser := flag.String("admin-user", "admin", "管理后台用户名")
+	adminPass := flag.String("admin-pass", "", "管理后台密码（为空=不启用 JWT 登录）")
+	jwtSecret := flag.String("jwt-secret", "", "JWT 签名密钥（为空则自动生成）")
 	staticDir := flag.String("static", "", "前端静态目录（ink 构建产物——可选，提供管理后台）")
 	flag.Parse()
 
@@ -67,12 +70,23 @@ func main() {
 	h := api.NewHandler(st)
 	agentH := api.NewAgentEndpoint(st, *agentToken)
 	adminH := api.NewAdminEndpoint(st, *adminToken)
+	var loginH *api.LoginEndpoint
+	if *adminPass != "" {
+		loginH = api.NewLoginEndpoint(*adminUser, *adminPass, *jwtSecret)
+	}
 	mux := http.NewServeMux()
 
 	// ink 契约：JSON-RPC 2.0 POST <base>/rpc2
 	mux.Handle("/rpc2", h)
 	// Agent 上报：POST /agent/status
 	mux.Handle("/agent/status", agentH)
+	// 登录（JWT）
+	if loginH != nil {
+		mux.Handle("/api/login", loginH)
+		mux.HandleFunc("/api/me2", loginH.AuthMiddleware(func(w http.ResponseWriter, _ *http.Request) {
+			writeJSON(w, map[string]any{"status": "success", "data": map[string]any{"logged_in": true, "username": *adminUser}})
+		}))
+	}
 	// 管理 API：/api/admin/*
 	mux.Handle("/api/admin/nodes", adminH)
 	mux.Handle("/api/admin/probes", adminH)
