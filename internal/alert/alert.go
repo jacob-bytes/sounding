@@ -51,6 +51,32 @@ func (m *Manager) Rules() []Rule {
 	return append([]Rule(nil), m.rules...)
 }
 
+// SetRule 新增/更新规则（同 kind+node 覆盖）。
+func (m *Manager) SetRule(r Rule) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for i, ex := range m.rules {
+		if ex.Kind == r.Kind && ex.Node == r.Node {
+			m.rules[i] = r
+			return
+		}
+	}
+	m.rules = append(m.rules, r)
+}
+
+// DeleteRule 删除规则。
+func (m *Manager) DeleteRule(kind, node string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := m.rules[:0]
+	for _, r := range m.rules {
+		if !(r.Kind == kind && r.Node == node) {
+			out = append(out, r)
+		}
+	}
+	m.rules = out
+}
+
 // Evaluate 评估一次事件（去重后投递 Webhook）。
 func (m *Manager) Evaluate(ev Event) {
 	m.mu.Lock()

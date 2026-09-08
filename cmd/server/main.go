@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/jacob-bytes/sounding/internal/adminui"
 	"github.com/jacob-bytes/sounding/internal/alert"
 	"github.com/jacob-bytes/sounding/internal/api"
 	"github.com/jacob-bytes/sounding/internal/notify"
@@ -87,6 +88,17 @@ func main() {
 	h := api.NewHandler(st)
 	agentH := api.NewAgentEndpoint(st, *agentToken)
 	adminH := api.NewAdminEndpoint(st, *adminToken)
+	adminH.SetStatusProvider(func() any { m, _ := st.LatestStatus(); return m })
+	if alertMgr != nil {
+		adminH.SetAlertHooks(
+			func() any { return alertMgr.Rules() },
+			func(kind, node string, threshold float64, _ string) error {
+				alertMgr.SetRule(alert.Rule{Kind: kind, Node: node, Threshold: threshold})
+				return nil
+			},
+			func(kind, node string) error { alertMgr.DeleteRule(kind, node); return nil },
+		)
+	}
 	var loginH *api.LoginEndpoint
 	if *adminPass != "" {
 		loginH = api.NewLoginEndpoint(*adminUser, *adminPass, *jwtSecret)
@@ -95,6 +107,23 @@ func main() {
 
 	// ink 契约：JSON-RPC 2.0 POST <base>/rpc2
 	mux.Handle("/rpc2", h)
+	// 内置管理页（Go embed——无需前端构建）
+	mux.HandleFunc("/admin/", adminui.Handler())
+	// Agent 配置下发（远程拉取探针目标）
+	mux.HandleFunc("/agent/config", func(w http.ResponseWriter, r *http.Request) {
+		uuid := r.URL.Query().Get("uuid")
+		if r.Header.Get("X-Auth-Token") != *agentToken && *agentToken != "" {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		names, err := st.AdminProbeTaskNames(uuid)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		tasks, _ := st.ProbeTasks(uuid)
+		writeJSON(w, map[string]any{"probe_names": names, "tasks": tasks})
+	})
 	// 健康检查（LB/K8s 探针）
 	mux.Handle("/healthz", &api.HealthEndpoint{Ready: func() error { _, err := st.Nodes(); return err }})
 	// Agent 上报：POST /agent/status
@@ -109,6 +138,7 @@ func main() {
 	// 管理 API：/api/admin/*
 	mux.Handle("/api/admin/nodes", adminH)
 	mux.Handle("/api/admin/probes", adminH)
+	mux.Handle("/api/admin/alerts", adminH)
 	// ink 初始化端点（InitManager）
 	// ink 初始化端点（VITE_API_BASE 即 base——根路径）
 	for _, p := range []string{"/me", "/public", "/version"} {

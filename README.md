@@ -116,7 +116,10 @@ curl -X POST http://主控:8080/api/admin/nodes -H 'X-Admin-Token: <admin-token>
 | 端点 | 方法 | 用途 |
 |---|---|---|
 | `/api/admin/nodes` | GET / POST | 查看 / 手动添加服务器 |
-| `/api/admin/probes` | GET / POST | 查看 / 配置探针任务（`client=*` 全局 / `client=n1` 节点级） |
+| `/api/admin/probes` | GET / POST / DELETE | 查看 / 配置 / 删除探针任务（`client=*` 全局 / `client=n1` 节点级） |
+| `/api/admin/alerts` | GET / POST / DELETE | 告警规则运行时 CRUD（kind/node/threshold） |
+| `/agent/config` | GET | Agent 拉取远程配置（探针目标下发） |
+| `/admin/` | GET | **内置管理页**（节点/探针/告警可视化） |
 | `/agent/status` | POST | Agent 上报（`X-Auth-Token`） |
 
 > 认证：管理 API 用 `-admin-token`；Agent 上报用 `-agent-token`。
@@ -203,6 +206,8 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 | **健康检查** | `GET /healthz`（LB/K8s 探针） |
 | **实时通道** | `/public` 返回 `theme_settings.rpcTransportMode=websocket` → ink 自动走 WS（秒级推送） |
 | **一键安装** | `curl -fsSL .../scripts/install.sh \| sh -s -- server` |
+| **内置管理页** | `http://<主控>:8080/admin/`（Go embed 单文件——节点/探针/告警规则可视化配置） |
+| **Agent 远程配置** | 主控改探针 → Agent 30s 内自动拉取（`-remote-config`，默认开） |
 
 ### 集群化（P2-3）
 

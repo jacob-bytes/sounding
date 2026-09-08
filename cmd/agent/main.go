@@ -26,6 +26,7 @@ func main() {
 		envInterval = "SOUNDING_INTERVAL"
 	)
 	configFile := flag.String("config", "", "配置文件路径（agent.yml——支持 SIGHUP/修改热重载）")
+	remoteConfig := flag.Bool("remote-config", true, "从主控拉取探针配置（远程下发）")
 	server := flag.String("server", envOr(envServer, "http://localhost:8080"), "主控地址（可用 $SOUNDING_SERVER）")
 	token := flag.String("token", envOr(envToken, "sounding-demo-token"), "上报认证 token（可用 $SOUNDING_TOKEN）")
 	interval := flag.Duration("interval", envOrDuration(envInterval, 15*time.Second), "采集周期（可用 $SOUNDING_INTERVAL）")
@@ -51,19 +52,27 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("sounding-agent %s → %s (every %s, config=%s)", uuid, finalServer, intervalVal, *configFile)
+	log.Printf("sounding-agent %s → %s (every %s, config=%s, remote-config=%v)", uuid, finalServer, intervalVal, *configFile, *remoteConfig)
 	ticker := time.NewTicker(intervalVal)
 	defer ticker.Stop()
 
+	// 远程配置拉取（主控下发的探针目标——30s 刷新）
+	remoteProbes := ""
+	if *remoteConfig {
+		remoteProbes = fetchRemoteProbes(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid)
+	}
 	// 首帧立即上报（注册节点）——server/token/probes 每次从热重载配置取
-	report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(fc.Probes()+","+*probeTargets))
+	report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(remoteProbes+","+fc.Probes()+","+*probeTargets))
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(fc.Probes()+","+*probeTargets))
+			if *remoteConfig {
+				remoteProbes = fetchRemoteProbes(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid)
+			}
+			report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(remoteProbes+","+fc.Probes()+","+*probeTargets))
 		}
 	}
 }
@@ -72,6 +81,39 @@ func main() {
 type probeTarget struct {
 	Name string `json:"name"`
 	Host string `json:"host"`
+}
+
+// fetchRemoteProbes 从主控拉取探针配置（"名称:主机,名称:主机"）。
+func fetchRemoteProbes(ctx context.Context, server, token, uuid string) string {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, server+"/agent/config?uuid="+uuid, nil)
+	if err != nil {
+		return ""
+	}
+	req.Header.Set("X-Auth-Token", token)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return ""
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return ""
+	}
+	var body struct {
+		Tasks []struct {
+			Name   string `json:"name"`
+			Target string `json:"target"`
+		} `json:"tasks"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return ""
+	}
+	parts := make([]string, 0, len(body.Tasks))
+	for _, t := range body.Tasks {
+		if t.Name != "" && t.Target != "" {
+			parts = append(parts, t.Name+":"+t.Target)
+		}
+	}
+	return strings.Join(parts, ",")
 }
 
 // envOr 读取环境变量或返回默认值。

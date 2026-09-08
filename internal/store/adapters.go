@@ -299,3 +299,27 @@ func (s *Store) AlertSnapshots() ([]alert.Snapshot, error) {
 	}
 	return out, nil
 }
+
+// AdminDeleteProbe 删除探针任务。
+func (s *Store) AdminDeleteProbe(client, name string) error {
+	_, err := s.db.Exec(`DELETE FROM probe_tasks WHERE client=? AND name=?`, client, name)
+	return err
+}
+
+// AdminProbeTaskNames 返回某 client 的探针名列表（Agent 配置下发用）。
+func (s *Store) AdminProbeTaskNames(client string) ([]string, error) {
+	rows, err := s.db.Query(`SELECT name FROM probe_tasks WHERE client=?`, client)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
