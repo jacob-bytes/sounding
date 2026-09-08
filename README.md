@@ -26,23 +26,40 @@
 
 - **sounding-server**：接收 Agent 上报 + 历史存储 + 暴露 Komari 兼容 RPC（ink 零改动接入）
 - **sounding-agent**：节点端采集（CPU/内存/磁盘/网络/系统/uptime）定时上报
-- **探针调度器**：Ping（TCP 拨号延迟）/HTTP 探针任务——结果经 `getPingRecords` 暴露给 ink 前端
-- **管理后台**：`-static <ink-dist>` 直接挂载 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink) 构建产物——**ink 前端即管理后台**
+- **探针调度器**：**ICMP 真探测**（非特权优先，失败回退 TCP）——结果经 `getPingRecords` 暴露
+- **告警**：离线/延迟/丢包规则（运行时 CRUD）+ **Telegram / Webhook** 通知（Notifier 接口可扩展）
+- **认证**：JWT 登录（HS256）+ Admin Token 双轨
+- **管理界面**：内置 `/admin/`（Go embed 单文件页——节点/探针/告警可视化）+ 可选挂载 ink 监控面板
 - **契约**：`contracts/contracts.md`（字段级——以 ink 为金标准）
 
-## 快速开始（M1+M2：主控 + Agent）
+## 能力清单
+
+| 能力 | 说明 |
+|---|---|
+| 节点采集 | CPU / 内存 / Swap / 磁盘 / 网络 / 负载（1/5/15）/ 温度 / 系统信息 |
+| 探针 | **ICMP**（非特权优先→TCP 回退）/ per-node 目标 / 全局任务 |
+| 实时 | **WebSocket JSON-RPC**（ink 秒级刷新）+ HTTP 轮询 |
+| 告警 | 离线 / 延迟 / 丢包 → **Telegram + Webhook**（运行时 CRUD，5min 去重） |
+| 认证 | JWT 登录（HS256）+ Admin Token |
+| 存储 | SQLite（WAL）· 自动保留清理 + VACUUM |
+| 管理 | 内置 `/admin/` 页面 + 完整 REST API + Agent 远程配置下发 |
+| 部署 | 单二进制 / Docker / 一键脚本 / 4 平台 Release |
+
+## 快速开始
 
 ```bash
 go build -o sounding-server ./cmd/server
 ./sounding-server -addr :8080 -db sounding.db   # 自动迁移 + 演示种子
 ```
 
-验证端点（ink 同款 JSON-RPC 2.0）：
+打开管理页：**http://localhost:8080/admin/**（添加节点 / 配置探针 / 告警规则）
+
+验证端点（JSON-RPC 2.0——ink 同款）：
 
 ```bash
 curl -X POST http://localhost:8080/rpc2 -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getNodes","params":{}}'
-# → result: [{"uuid":"demo-001","name":"Demo 节点 · 本地",...}]
+# → result: {"demo-001": {"uuid":"demo-001","name":"Demo 节点 · 本地",...}}
 ```
 
 ### Agent（M2）
@@ -65,26 +82,37 @@ go build -o sounding-agent ./cmd/agent
 
 | 里程碑 | 内容 | 状态 |
 |---|---|---|
-| **M1** | 主控 3 端点（nodes/latest/recent）+ SQLite + 演示数据 | ✅ |
-| M2 | Agent 采集器（gopsutil + 上报 + 心跳离线判定） | ⏳ |
-| M3 | Ping/HTTP 探针任务（getPingRecords） | ⏳ |
-| M4 | 认证（JWT）+ 完整契约（getClient/settings） | ⏳ |
-| M5 | Docker 编排 + 跨平台 Release | ⏳ |
+| M1 | 主控 3 端点（nodes/latest/recent）+ SQLite + 演示数据 | ✅ |
+| M2 | Agent 采集器（gopsutil + 上报 + 心跳） | ✅ |
+| M3 | 探针调度器 + getPingRecords + ink 面板挂载 | ✅ |
+| M4 | 管理 API + per-node 探针 + Admin Token | ✅ |
+| M5 | Docker 编排 + 跨平台 Release（linux/darwin × amd64/arm64） | ✅ |
+| M6 | ink 契约对齐（map 格式）+ 节点卡片满血渲染 | ✅ |
+| M7 | ICMP 真探测 + 离线判定 + 告警 Webhook + JWT 认证 | ✅ |
+| M8 | 历史保留 + 温度/负载指标 + 健康检查 + 一键安装 | ✅ |
+| M9 | **WS 实时通道 + Telegram 通知 + 告警 CRUD + 内置管理页 + Agent 远程配置** | ✅ |
+| M10 | 通知渠道扩展（钉钉/飞书/邮件）、PostgreSQL 存储、探针类型扩展 | ⏳ |
 
 ## 目录
 
 ```text
-cmd/server        主控入口
-cmd/agent        Agent 入口（M2）
-internal/api      JSON-RPC 2.0 处理器（契约实现）
-internal/store    SQLite 存储（nodes/status_history/ping_records）
-internal/collect  Agent 采集（M2）
-contracts/        RPC 契约清单（字段级）
+cmd/server         主控入口
+cmd/agent          Agent 入口（含 -config 热重载 / -remote-config 远程拉取）
+internal/api       JSON-RPC 2.0 + WS 处理器（契约实现）+ 管理 API
+internal/store     SQLite 存储（nodes/status_history/probe_*）+ 保留策略
+internal/collect   Agent 采集（gopsutil：CPU/内存/磁盘/网络/温度/负载）
+internal/probe     探针（ICMP/TCP）+ 调度器
+internal/alert     告警规则 + 去重 + 多渠道投递
+internal/notify    通知渠道（Notifier 接口：Telegram / Webhook）
+internal/auth      JWT 签发/校验
+internal/adminui   内置管理页（Go embed）
+contracts/         RPC 契约清单（字段级）
+scripts/           一键安装脚本
 ```
 
 
 
-## 配置手册（M4）
+## 配置手册
 
 ### 添加服务器（两种方式）
 
@@ -177,14 +205,14 @@ SOUNDING_PROBES="上海移动:223.5.5.5,腾讯 DNS:119.29.29.29" \
 
 > 主控侧：`-agent-token` 与 `-admin-token` 由部署者自行设定——**不同部署者互不干扰**（各自的 server 管各自的 agents）。
 
-## Docker / Release（M5）
+## Docker / Release
 
 ```bash
 docker compose up -d   # 主控（挂载 ./admin 为 ink 管理后台）
 # 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 → Release
 ```
 
-## 与 ink 前端联调（已验证）
+## 与 ink 前端联调
 
 ```bash
 # 构建 ink（指向 sounding）
@@ -194,7 +222,7 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 # → http://localhost:8080 即完整面板（初始化/设置/健康检查/数据新鲜度全通）
 ```
 
-## 运维与安全（M7-M8）
+## 运维与安全
 
 | 能力 | 用法 |
 |---|---|
