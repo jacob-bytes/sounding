@@ -191,6 +191,25 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 # → http://localhost:8080 即完整面板（初始化/设置/健康检查/数据新鲜度全通）
 ```
 
+## 运维与安全（M7-M8）
+
+| 能力 | 用法 |
+|---|---|
+| **ICMP 真探测** | 默认启用（非特权 ICMP，失败自动回退 TCP） |
+| **离线判定** | 60s 无上报标记离线（前端卡片灰显） |
+| **告警 Webhook** | `-alert-webhook <url> -alert-latency-ms 200 -alert-offline`（JSON POST，5 分钟去重） |
+| **JWT 登录** | `-admin-user admin -admin-pass <pw> -jwt-secret <secret>` → `POST /api/login` |
+| **历史保留** | `-retain-days 30`（6 小时清理 + VACUUM） |
+| **健康检查** | `GET /healthz`（LB/K8s 探针） |
+| **一键安装** | `curl -fsSL .../scripts/install.sh \| sh -s -- server` |
+
+### 集群化（P2-3）
+
+主控为**无状态服务**（唯一状态在 SQLite）——水平扩展方案：
+1. **单写多读**：主控实例共享同一 SQLite（NFS/云盘）+ 外部 LB（`/healthz` 健康检查）
+2. **换存储**：将 `internal/store` 适配到 PostgreSQL（接口已隔离，替换实现即可）
+3. Agent 侧无状态——指向 LB 地址即可（任一主控可处理上报）
+
 ## 致谢
 
 - 前端契约金标准：[komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)
