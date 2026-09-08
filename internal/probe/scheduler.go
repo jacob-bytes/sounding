@@ -53,14 +53,13 @@ func (s *Scheduler) loop(ctx context.Context) {
 func (s *Scheduler) run(ctx context.Context, t Task) {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	ms, kind, err := Ping(probeCtx, t.Target)
-	if err != nil {
-		log.Printf("probe %s(%d) [%s]: %v", t.Name, t.ID, kind, err)
-		// 记录丢包（-1 表示超时/丢包——ink 契约）
+	res := Run(probeCtx, t.Type, t.Target)
+	if !res.OK {
+		log.Printf("probe %s(%d) [%s]: %s", t.Name, t.ID, res.Type, res.Detail)
 		_ = s.store.InsertProbe(s.client, t.ID, time.Now().Format(time.RFC3339), -1)
 		return
 	}
-	if err := s.store.InsertProbe(s.client, t.ID, time.Now().Format(time.RFC3339), ms); err != nil {
+	if err := s.store.InsertProbe(s.client, t.ID, time.Now().Format(time.RFC3339), res.Value); err != nil {
 		log.Printf("probe insert: %v", err)
 	}
 }

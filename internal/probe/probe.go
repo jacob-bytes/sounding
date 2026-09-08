@@ -24,13 +24,6 @@ type Record struct {
 	Value  float64 `json:"value"` // 毫秒
 }
 
-// Result 单次探测输出。
-type Result struct {
-	TaskID int     `json:"task_id"`
-	Value  float64 `json:"value"`
-	OK     bool    `json:"ok"`
-}
-
 // TCPPing 通过 TCP 拨号测量往返延迟（毫秒；无 raw socket 依赖，跨平台）。
 func TCPPing(ctx context.Context, target string) (float64, error) {
 	start := time.Now()

@@ -11,7 +11,7 @@ type AdminEndpoint struct {
 		AdminNodes() (map[string]Client, error)
 		AdminUpsertNode(n Client) error
 		AdminProbeTasks() ([]AdminProbe, error)
-		AdminUpsertProbe(client, target, name string, enabled bool) error
+		AdminUpsertProbe(client, target, name, typ string, enabled bool) error
 		AdminDeleteProbe(client, name string) error
 		AdminProbeTaskNames(client string) ([]string, error)
 	}
@@ -36,6 +36,7 @@ type AdminProbe struct {
 	Client  string `json:"client"`
 	Target  string `json:"target"`
 	Name    string `json:"name"`
+	Type    string `json:"type"`
 	Enabled bool   `json:"enabled"`
 }
 
@@ -44,7 +45,7 @@ func NewAdminEndpoint(s interface {
 	AdminNodes() (map[string]Client, error)
 	AdminUpsertNode(n Client) error
 	AdminProbeTasks() ([]AdminProbe, error)
-	AdminUpsertProbe(client, target, name string, enabled bool) error
+	AdminUpsertProbe(client, target, name, typ string, enabled bool) error
 	AdminDeleteProbe(client, name string) error
 	AdminProbeTaskNames(client string) ([]string, error)
 }, token string) *AdminEndpoint {
@@ -151,6 +152,7 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				Client  string `json:"client"`
 				Target  string `json:"target"`
 				Name    string `json:"name"`
+				Type    string `json:"type"`
 				Enabled *bool  `json:"enabled"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
@@ -161,7 +163,7 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if p.Enabled != nil {
 				enabled = *p.Enabled
 			}
-			if err := h.store.AdminUpsertProbe(p.Client, p.Target, p.Name, enabled); err != nil {
+			if err := h.store.AdminUpsertProbe(p.Client, p.Target, p.Name, p.Type, enabled); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

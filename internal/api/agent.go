@@ -19,6 +19,7 @@ type AgentPayload struct {
 type ProbeTarget struct {
 	Name string `json:"name"`
 	Host string `json:"host"`
+	Type string `json:"type,omitempty"`
 }
 
 // AgentStatus 上报状态（字段与 collect.Snapshot 对齐）。
@@ -94,7 +95,11 @@ func (h *AgentEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if pt.Name == "" || pt.Host == "" {
 			continue
 		}
-		_ = h.store.UpsertProbeTask(payload.UUID, pt.Host, pt.Name, "ping", 60, true)
+		typ := pt.Type
+		if typ == "" {
+			typ = "icmp"
+		}
+		_ = h.store.UpsertProbeTask(payload.UUID, pt.Host, pt.Name, typ, 60, true)
 	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

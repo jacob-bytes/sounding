@@ -241,7 +241,7 @@ func (s *Store) AdminUpsertNode(n api.Client) error {
 
 // AdminProbeTasks 管理视角探针任务。
 func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
-	rows, err := s.db.Query(`SELECT id, client, target, name, enabled FROM probe_tasks ORDER BY client, id`)
+	rows, err := s.db.Query(`SELECT id, client, target, name, type, enabled FROM probe_tasks ORDER BY client, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -250,7 +250,7 @@ func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
 	for rows.Next() {
 		var p api.AdminProbe
 		var enabled int
-		if err := rows.Scan(&p.ID, &p.Client, &p.Target, &p.Name, &enabled); err != nil {
+		if err := rows.Scan(&p.ID, &p.Client, &p.Target, &p.Name, &p.Type, &enabled); err != nil {
 			return nil, err
 		}
 		p.Enabled = enabled == 1
@@ -259,15 +259,18 @@ func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
 	return out, rows.Err()
 }
 
-// AdminUpsertProbe 管理视角创建/更新探针。
-func (s *Store) AdminUpsertProbe(client, target, name string, enabled bool) error {
+// AdminUpsertProbe 管理视角创建/更新探针（typ: icmp|tcp|http|dns）。
+func (s *Store) AdminUpsertProbe(client, target, name, typ string, enabled bool) error {
+	if typ == "" {
+		typ = "icmp"
+	}
 	e := 0
 	if enabled {
 		e = 1
 	}
-	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, name, type, interval_sec, enabled) VALUES (?,?,?,'ping',60,?)
-		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, enabled=excluded.enabled`,
-		client, target, name, e)
+	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, name, type, interval_sec, enabled) VALUES (?,?,?,?,60,?)
+		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, type=excluded.type, enabled=excluded.enabled`,
+		client, target, name, typ, e)
 	return err
 }
 

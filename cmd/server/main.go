@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jacob-bytes/sounding/internal/adminui"
@@ -26,6 +27,14 @@ func main() {
 	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭该渠道）")
 	tgToken := flag.String("telegram-token", "", "Telegram Bot Token（与 chat-id 同时提供则启用）")
 	tgChat := flag.String("telegram-chat-id", "", "Telegram Chat ID")
+	dingTalk := flag.String("dingtalk-webhook", "", "钉钉机器人 Webhook（可选 -dingtalk-secret 加签）")
+	dingTalkSecret := flag.String("dingtalk-secret", "", "钉钉加签密钥")
+	feishu := flag.String("feishu-webhook", "", "飞书机器人 Webhook")
+	smtpHost := flag.String("smtp-host", "", "SMTP 服务器（如 smtp.example.com:587）")
+	smtpUser := flag.String("smtp-user", "", "SMTP 用户名")
+	smtpPass := flag.String("smtp-pass", "", "SMTP 密码")
+	smtpFrom := flag.String("smtp-from", "", "发件人")
+	smtpTo := flag.String("smtp-to", "", "收件人（逗号分隔）")
 	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
 	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
 	retainDays := flag.Int("retain-days", 30, "历史数据保留天数（0=永久）")
@@ -54,6 +63,15 @@ func main() {
 		}
 		if *tgToken != "" && *tgChat != "" {
 			notifiers = append(notifiers, notify.NewTelegram(*tgToken, *tgChat))
+		}
+		if *dingTalk != "" {
+			notifiers = append(notifiers, notify.NewDingTalk(*dingTalk, *dingTalkSecret))
+		}
+		if *feishu != "" {
+			notifiers = append(notifiers, notify.NewFeishu(*feishu))
+		}
+		if *smtpHost != "" && *smtpFrom != "" && *smtpTo != "" {
+			notifiers = append(notifiers, notify.NewEmail(*smtpHost, *smtpUser, *smtpPass, *smtpFrom, strings.Split(*smtpTo, ",")))
 		}
 		if len(notifiers) > 0 {
 			rules := []alert.Rule{}
