@@ -1,0 +1,17 @@
+# Render 免费部署配置（无需信用卡）
+# 用法：Render Dashboard → New → Blueprint → 连接仓库 → 自动读取本文件
+services:
+  - type: web
+    name: sounding-demo
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore          # 可选：oregon / frankfurt / ohio / singapore
+    healthCheckPath: /healthz
+    envVars:
+      - key: SOUNDING_AGENT_TOKEN
+        value: demo-agent-token
+    dockerCommand: >-
+      sounding-server -addr :8080 -db /tmp/sounding.db -seed -static /admin
+      -agent-token demo-agent-token -admin-token demo-admin-token
+      -admin-user demo -admin-pass demo123 -retain-days 3
