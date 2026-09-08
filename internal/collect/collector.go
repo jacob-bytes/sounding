@@ -11,6 +11,7 @@ import (
 	"github.com/shirou/gopsutil/v4/load"
 	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/shirou/gopsutil/v4/net"
+	"github.com/shirou/gopsutil/v4/sensors"
 )
 
 // Snapshot 一次采集结果（字段与 ink StatusRecord 对齐）。
@@ -27,6 +28,9 @@ type Snapshot struct {
 	Process       float64 `json:"process"`
 	Connections   float64 `json:"connections"`
 	ConnectionsUDP float64 `json:"connections_udp"`
+	Temp          float64 `json:"temp"`
+	Load5         float64 `json:"load5"`
+	Load15        float64 `json:"load15"`
 	RAMTotal      float64 `json:"ram_total"`
 	SwapTotal     float64 `json:"swap_total"`
 	DiskTotal     float64 `json:"disk_total"`
@@ -75,6 +79,16 @@ func (c *Collector) Collect(ctx context.Context) (Snapshot, error) {
 	ld, err := load.Avg()
 	if err == nil {
 		s.Load = ld.Load1
+		s.Load5 = ld.Load5
+		s.Load15 = ld.Load15
+	}
+	// 温度（部分平台无传感器——静默忽略）
+	if temps, err := sensors.SensorsTemperatures(); err == nil {
+		for _, t := range temps {
+			if t.Temperature > s.Temp {
+				s.Temp = t.Temperature
+			}
+		}
 	}
 	netStat, err := net.IOCounters(false)
 	if err == nil && len(netStat) > 0 {

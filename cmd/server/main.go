@@ -24,6 +24,7 @@ func main() {
 	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭告警）")
 	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
 	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
+	retainDays := flag.Int("retain-days", 30, "历史数据保留天数（0=永久）")
 	adminUser := flag.String("admin-user", "admin", "管理后台用户名")
 	adminPass := flag.String("admin-pass", "", "管理后台密码（为空=不启用 JWT 登录）")
 	jwtSecret := flag.String("jwt-secret", "", "JWT 签名密钥（为空则自动生成）")
@@ -62,6 +63,9 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sched.Start(ctx)
+	if *retainDays > 0 {
+		go st.RetentionLoop(ctx, *retainDays)
+	}
 	if alertMgr != nil {
 		go alert.Watch(ctx, st, alertMgr, 30*time.Second)
 		log.Printf("alerts enabled → %s", *alertWebhook)

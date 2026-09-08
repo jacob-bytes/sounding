@@ -35,6 +35,9 @@ type AgentStatus struct {
 	Process       float64 `json:"process"`
 	Connections   float64 `json:"connections"`
 	ConnectionsUDP float64 `json:"connections_udp"`
+	Temp          float64 `json:"temp"`
+	Load5         float64 `json:"load5"`
+	Load15        float64 `json:"load15"`
 	RAMTotal      float64 `json:"ram_total"`
 	SwapTotal     float64 `json:"swap_total"`
 	DiskTotal     float64 `json:"disk_total"`

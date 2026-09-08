@@ -33,7 +33,7 @@ func (s *Store) Nodes() (map[string]api.Client, error) {
 
 // LatestStatus 返回 map[uuid]NodeStatus（含 online/uptime/ping 汇总）。
 func (s *Store) LatestStatus() (map[string]api.NodeStatus, error) {
-	rows, err := s.db.Query(`SELECT client, time, cpu, ram, swap, load, disk, net_in, net_out, net_total_up, net_total_down, process, connections, connections_udp, ram_total, swap_total, disk_total
+	rows, err := s.db.Query(`SELECT client, time, cpu, ram, swap, load, disk, net_in, net_out, net_total_up, net_total_down, process, connections, connections_udp, ram_total, swap_total, disk_total, temp, load5, load15
 		FROM status_history WHERE rowid IN (SELECT MAX(rowid) FROM status_history GROUP BY client)`)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func (s *Store) LatestStatus() (map[string]api.NodeStatus, error) {
 	out := map[string]api.NodeStatus{}
 	for rows.Next() {
 		var n api.NodeStatus
-		if err := rows.Scan(&n.Client, &n.Time, &n.CPU, &n.RAM, &n.Swap, &n.Load, &n.Disk, &n.NetIn, &n.NetOut, &n.NetTotalUp, &n.NetTotalDown, &n.Process, &n.Connections, &n.ConnectionsUDP, &n.RAMTotal, &n.SwapTotal, &n.DiskTotal); err != nil {
+		if err := rows.Scan(&n.Client, &n.Time, &n.CPU, &n.RAM, &n.Swap, &n.Load, &n.Disk, &n.NetIn, &n.NetOut, &n.NetTotalUp, &n.NetTotalDown, &n.Process, &n.Connections, &n.ConnectionsUDP, &n.RAMTotal, &n.SwapTotal, &n.DiskTotal, &n.Temp, &n.Load5, &n.Load15); err != nil {
 			return nil, err
 		}
 		out[n.Client] = n
@@ -220,10 +220,10 @@ func (s *Store) UpsertNode(uuid, name, info string) error {
 
 // InsertStatus 写入一条状态（client = uuid）。
 func (s *Store) InsertStatus(uuid string, st api.AgentStatus) error {
-	_, err := s.db.Exec(`INSERT INTO status_history (client, time, cpu, ram, swap, load, disk, net_in, net_out, net_total_up, net_total_down, process, connections, connections_udp, ram_total, swap_total, disk_total)
-		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+	_, err := s.db.Exec(`INSERT INTO status_history (client, time, cpu, ram, swap, load, disk, net_in, net_out, net_total_up, net_total_down, process, connections, connections_udp, temp, load5, load15, ram_total, swap_total, disk_total)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		uuid, time.Now().Format(time.RFC3339), st.CPU, st.RAM, st.Swap, st.Load, st.Disk, st.NetIn, st.NetOut,
-		st.NetTotalUp, st.NetTotalDown, st.Process, st.Connections, st.ConnectionsUDP, st.RAMTotal, st.SwapTotal, st.DiskTotal)
+		st.NetTotalUp, st.NetTotalDown, st.Process, st.Connections, st.ConnectionsUDP, st.Temp, st.Load5, st.Load15, st.RAMTotal, st.SwapTotal, st.DiskTotal)
 	return err
 }
 
