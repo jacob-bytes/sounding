@@ -3,7 +3,6 @@ package probe
 import (
 	"context"
 	"log"
-	"net"
 	"sync"
 	"time"
 )
@@ -54,14 +53,11 @@ func (s *Scheduler) loop(ctx context.Context) {
 func (s *Scheduler) run(ctx context.Context, t Task) {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	// 目标未带端口时补默认端口（TCP 探测用）
-	target := t.Target
-	if _, _, err := net.SplitHostPort(target); err != nil {
-		target = net.JoinHostPort(target, "443")
-	}
-	ms, err := TCPPing(probeCtx, target)
+	ms, kind, err := Ping(probeCtx, t.Target)
 	if err != nil {
-		log.Printf("probe %s(%d): %v", t.Name, t.ID, err)
+		log.Printf("probe %s(%d) [%s]: %v", t.Name, t.ID, kind, err)
+		// 记录丢包（-1 表示超时/丢包——ink 契约）
+		_ = s.store.InsertProbe(s.client, t.ID, time.Now().Format(time.RFC3339), -1)
 		return
 	}
 	if err := s.store.InsertProbe(s.client, t.ID, time.Now().Format(time.RFC3339), ms); err != nil {

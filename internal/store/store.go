@@ -14,10 +14,12 @@ type Store struct {
 
 // Open 打开（不存在则创建）SQLite 数据库并进行迁移。
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	// WAL + busy_timeout：探针/Agent/前端并发读写安全
+	db, err := sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return nil, err
 	}
+	db.SetMaxOpenConns(1)
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		return nil, err
