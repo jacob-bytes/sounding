@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"log"
 	"net/http"
@@ -53,6 +54,40 @@ func main() {
 	// 管理 API：/api/admin/*
 	mux.Handle("/api/admin/nodes", adminH)
 	mux.Handle("/api/admin/probes", adminH)
+	// ink 初始化端点（InitManager）
+	// ink 初始化端点（VITE_API_BASE 即 base——根路径）
+	for _, p := range []string{"/me", "/public", "/version"} {
+		mux.HandleFunc(p, func(w http.ResponseWriter, _ *http.Request) {
+			switch p {
+			case "/me":
+				writeJSON(w, map[string]any{"logged_in": false})
+			case "/public":
+				writeJSON(w, map[string]any{
+					"status": "success",
+					"data": map[string]any{
+						"theme_settings": map[string]any{},
+						"record_enabled":  true,
+						"sitename":       "sounding",
+						"description":    "sounding",
+						"custom_body":    "",
+						"custom_head":    "",
+						"allow_cors":     false,
+						"disable_password_login": true,
+						"oauth_enable":   false,
+						"oauth_provider": nil,
+						"private_site":   false,
+					},
+				})
+			case "/version":
+				writeJSON(w, map[string]any{"version": "0.1.0"})
+			}
+		})
+	}
+	mux.HandleFunc("/api/me", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"logged_in": false}) })
+	mux.HandleFunc("/api/public", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"theme_settings": map[string]any{}, "record_enabled": true})
+	})
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"version": "0.1.0"}) })
 	// 管理后台（ink 前端构建产物）
 	if *staticDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(*staticDir)))
@@ -63,4 +98,9 @@ func main() {
 	if err := http.ListenAndServe(*addr, mux); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func writeJSON(w http.ResponseWriter, v any) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(v)
 }

@@ -174,6 +174,23 @@ SOUNDING_PROBES="上海移动:223.5.5.5,腾讯 DNS:119.29.29.29" \
 
 > 主控侧：`-agent-token` 与 `-admin-token` 由部署者自行设定——**不同部署者互不干扰**（各自的 server 管各自的 agents）。
 
+## Docker / Release（M5）
+
+```bash
+docker compose up -d   # 主控（挂载 ./admin 为 ink 管理后台）
+# 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 → Release
+```
+
+## 与 ink 前端联调（已验证）
+
+```bash
+# 构建 ink（指向 sounding）
+cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
+# 主控挂载管理后台
+./sounding-server -addr :8080 -db sounding.db -static ./komari-theme-ink/dist
+# → http://localhost:8080 即完整面板（初始化/设置/健康检查/数据新鲜度全通）
+```
+
 ## 致谢
 
 - 前端契约金标准：[komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)

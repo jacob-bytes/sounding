@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 )
 
 // RPCRequest 对应 ink rpc.ts 的 JSON-RPC 2.0 请求。
@@ -103,11 +104,25 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	var result any
 	var err error
-	switch req.Method {
+	// ink 的 RPC 容器可能带命名空间前缀（如 common:getNodes / rpc.ping）——规范化
+	method := req.Method
+	if i := strings.LastIndex(method, ":"); i >= 0 {
+		method = method[i+1:]
+	} else if i := strings.LastIndex(method, "."); i >= 0 {
+		method = method[i+1:]
+	}
+	switch method {
+	case "ping":
+		result = "pong"
 	case "getMethods":
-		result = []string{"getMethods", "getVersion", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus", "getPingRecords"}
+		result = []string{"getMethods", "getVersion", "getClient", "getHelp", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus", "getPingRecords"}
 	case "getVersion":
 		result = map[string]string{"version": "0.1.0"}
+	case "getClient":
+		// 访客客户端信息（ink init 调用——宽松返回）
+		result = map[string]any{"ip": "", "country": "CN", "country_code": "CN", "asn": "", "isp": ""}
+	case "getHelp":
+		result = "<html><body><h1>sounding</h1></body></html>"
 	case "getNodes":
 		result, err = h.store.Nodes()
 	case "getNodesLatestStatus":

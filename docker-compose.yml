@@ -1,0 +1,10 @@
+# sounding 编排示例：主控（含管理后台）+ Agent（可选）
+services:
+  server:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./admin:/admin        # ink 前端构建产物（管理后台 UI）
+    command: ["-addr", ":8080", "-db", "/data/sounding.db", "-static", "/admin", "-agent-token", "${SOUNDING_AGENT_TOKEN:-changeme-agent}", "-admin-token", "${SOUNDING_ADMIN_TOKEN:-changeme-admin}"]
