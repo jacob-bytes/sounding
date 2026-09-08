@@ -82,6 +82,8 @@ func main() {
 
 	// ink 契约：JSON-RPC 2.0 POST <base>/rpc2
 	mux.Handle("/rpc2", h)
+	// 健康检查（LB/K8s 探针）
+	mux.Handle("/healthz", &api.HealthEndpoint{Ready: func() error { _, err := st.Nodes(); return err }})
 	// Agent 上报：POST /agent/status
 	mux.Handle("/agent/status", agentH)
 	// 登录（JWT）
