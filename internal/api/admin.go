@@ -19,7 +19,8 @@ type AdminEndpoint struct {
 	statuses func() any
 	token    string
 	alerts   func() any
-	setAlert func(kind, node string, threshold float64, webhook string) error
+	setAlert   func(kind, node string, threshold float64, webhook string) error
+	setAlertEx func(kind, node string, threshold float64, webhook, silenceUntil string, muteWindows []string) error
 	delAlert func(kind, node string) error
 }
 
@@ -60,6 +61,11 @@ func (h *AdminEndpoint) SetStatusProvider(f func() any) { h.statuses = f }
 // SetAlertHooks 注入告警规则读写（避免包循环）。
 func (h *AdminEndpoint) SetAlertHooks(list func() any, set func(kind, node string, threshold float64, webhook string) error, del func(kind, node string) error) {
 	h.alerts, h.setAlert, h.delAlert = list, set, del
+}
+
+// SetAlertHooksEx 注入扩展规则读写（含静默期）。
+func (h *AdminEndpoint) SetAlertHooksEx(list func() any, set func(kind, node string, threshold float64, webhook, silenceUntil string, muteWindows []string) error, del func(kind, node string) error) {
+	h.alerts, h.setAlertEx, h.delAlert = list, set, del
 }
 
 func (h *AdminEndpoint) auth(r *http.Request) bool {
@@ -123,16 +129,18 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"rules": h.alerts()})
 		case http.MethodPost:
 			var p struct {
-				Kind      string  `json:"kind"`
-				Node      string  `json:"node"`
-				Threshold float64 `json:"threshold"`
-				Webhook   string  `json:"webhook"`
+				Kind         string   `json:"kind"`
+				Node         string   `json:"node"`
+				Threshold    float64  `json:"threshold"`
+				Webhook      string   `json:"webhook"`
+				SilenceUntil string   `json:"silence_until"`
+				MuteWindows  []string `json:"mute_windows"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				http.Error(w, "bad payload", http.StatusBadRequest)
 				return
 			}
-			if err := h.setAlert(p.Kind, p.Node, p.Threshold, p.Webhook); err != nil {
+			if err := h.setAlertEx(p.Kind, p.Node, p.Threshold, p.Webhook, p.SilenceUntil, p.MuteWindows); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

@@ -91,13 +91,14 @@
 
   <div class="card">
     <h2>告警规则 <span>kind: offline / latency / loss</span></h2>
-    <table id="alerts"><thead><tr><th>类型</th><th>节点</th><th>阈值</th><th></th></tr></thead><tbody></tbody></table>
+    <table id="alerts"><thead><tr><th>类型</th><th>节点</th><th>阈值</th><th>静默时段</th><th></th></tr></thead><tbody></tbody></table>
     <div class="row4" style="margin-top:12px">
       <div><label>类型</label>
         <select id="a-kind"><option value="offline">offline（离线）</option><option value="latency">latency（延迟 ms）</option><option value="loss">loss（丢包 %）</option></select>
       </div>
       <div><label>节点（*=全部）</label><input id="a-node" value="*"></div>
       <div><label>阈值</label><input id="a-threshold" type="number" value="200"></div>
+      <div><label>静默时段（如 02:00-04:00）</label><input id="a-mute" placeholder="留空=不静默"></div>
       <button onclick="addAlert()">添加规则</button>
     </div>
     <div class="status" id="alert-status"></div>
@@ -148,9 +149,9 @@ async function loadAlerts() {
   try {
     const d = await api('/api/admin/alerts');
     document.querySelector('#alerts tbody').innerHTML = (d.rules || []).map(r =>
-      `<tr><td>${r.kind}</td><td><code>${r.node}</code></td><td><code>${r.threshold}</code></td>
+      `<tr><td>${r.kind}</td><td><code>${r.node}</code></td><td><code>${r.threshold}</code></td><td class="muted">${(r.mute_windows || []).join(', ') || '—'}</td>
        <td><button class="danger" onclick="delAlert('${r.kind}','${r.node}')">删除</button></td></tr>`).join('')
-      || '<tr><td colspan="4" class="muted">暂无规则</td></tr>';
+      || '<tr><td colspan="5" class="muted">暂无规则</td></tr>';
   } catch (e) {}
 }
 async function editNode(uuid) {
@@ -199,6 +200,7 @@ async function addAlert() {
     kind: document.getElementById('a-kind').value,
     node: document.getElementById('a-node').value.trim() || '*',
     threshold: Number(document.getElementById('a-threshold').value) || 0,
+    mute_windows: document.getElementById('a-mute').value.trim() ? [document.getElementById('a-mute').value.trim()] : [],
   }) });
   document.getElementById('alert-status').textContent = '✓ 已添加';
   loadAlerts();

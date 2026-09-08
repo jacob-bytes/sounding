@@ -4,10 +4,12 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import TrendChart from '@/components/TrendChart.vue'
 import { CardX } from '@/components/ui/card-x'
+import { useTheme } from '@/composables/useTheme'
 import { rpc } from '@/services/rpc'
 import type { Client, NodeStatus } from '@/services/rpc'
 import { formatBytes, formatBytesSplit, formatSpeed, formatUptime, percent, statusOf } from '@/utils/format'
 
+const { theme, toggle: toggleTheme } = useTheme()
 const route = useRoute()
 const router = useRouter()
 const uuid = computed(() => String(route.params.uuid))
@@ -80,6 +82,14 @@ function latencyTone(ms: number): string {
         <span class="size-1.5 rounded-full" :class="status?.online ? 'bg-success' : 'bg-destructive'" />
         <span class="text-xs text-muted-foreground">{{ status?.online ? '在线' : '离线' }}</span>
         <span v-if="node?.region" class="ml-auto rounded-full bg-muted px-2 py-0.5 font-mono text-[10px] text-muted-foreground">{{ node.region }}</span>
+        <button
+          class="inline-flex items-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+          :class="!node?.region ? 'ml-auto' : ''"
+          :title="theme === 'dark' ? '切换亮色' : '切换暗色'"
+          @click="toggleTheme"
+        >
+          <Icon :icon="theme === 'dark' ? 'tabler:sun' : 'tabler:moon'" :width="15" />
+        </button>
       </div>
     </header>
 

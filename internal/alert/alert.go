@@ -3,6 +3,7 @@ package alert
 import (
 	"context"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,9 +12,36 @@ import (
 
 // Rule 告警规则。
 type Rule struct {
-	Kind      string  `json:"kind"`      // offline | latency | loss
-	Node      string  `json:"node"`      // uuid 或 *（全部）
-	Threshold float64 `json:"threshold"` // 阈值（ms / %）
+	Kind         string   `json:"kind"`           // offline | latency | loss
+	Node         string   `json:"node"`           // uuid 或 *（全部）
+	Threshold    float64  `json:"threshold"`      // 阈值（ms / %）
+	SilenceUntil string   `json:"silence_until"`  // 静默截止（RFC3339，空=不静默）
+	MuteWindows  []string `json:"mute_windows"`   // 每日静默时段 "02:00-04:00"
+}
+
+// silenced 判断规则当前是否处于静默（维护窗口）。
+func (r Rule) silenced(now time.Time) bool {
+	if r.SilenceUntil != "" {
+		if t, err := time.Parse(time.RFC3339, r.SilenceUntil); err == nil && now.Before(t) {
+			return true
+		}
+	}
+	cur := now.Format("15:04")
+	for _, w := range r.MuteWindows {
+		parts := strings.SplitN(w, "-", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		start, end := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if start <= end {
+			if cur >= start && cur < end {
+				return true
+			}
+		} else if cur >= start || cur < end { // 跨午夜
+			return true
+		}
+	}
+	return false
 }
 
 // Event 告警事件。
@@ -86,8 +114,13 @@ func (m *Manager) Evaluate(ev Event) {
 		return
 	}
 	matched := false
+	now := time.Now()
 	for _, r := range m.rules {
 		if r.Kind == ev.Kind && (r.Node == "*" || r.Node == ev.Node) && ev.Value >= r.Threshold {
+			if r.silenced(now) { // 维护窗口内——跳过通知
+				m.mu.Unlock()
+				return
+			}
 			ev.Threshold = r.Threshold
 			matched = true
 			break

@@ -116,10 +116,10 @@ func main() {
 	adminH := api.NewAdminEndpoint(st, *adminToken)
 	adminH.SetStatusProvider(func() any { m, _ := st.LatestStatus(); return m })
 	if alertMgr != nil {
-		adminH.SetAlertHooks(
+		adminH.SetAlertHooksEx(
 			func() any { return alertMgr.Rules() },
-			func(kind, node string, threshold float64, _ string) error {
-				alertMgr.SetRule(alert.Rule{Kind: kind, Node: node, Threshold: threshold})
+			func(kind, node string, threshold float64, _, silenceUntil string, muteWindows []string) error {
+				alertMgr.SetRule(alert.Rule{Kind: kind, Node: node, Threshold: threshold, SilenceUntil: silenceUntil, MuteWindows: muteWindows})
 				return nil
 			},
 			func(kind, node string) error { alertMgr.DeleteRule(kind, node); return nil },

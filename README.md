@@ -26,9 +26,11 @@
 
 ## 截图
 
-**监控面板**（`/`——sounding 自研，复用 ink 设计系统）
+**监控面板**（`/`——sounding 自研，复用 ink 设计系统，**亮/暗主题**）
 
-![sounding dashboard](docs/dashboard.png)
+| 亮色 | 暗色 |
+|---|---|
+| ![dashboard light](docs/dashboard.png) | ![dashboard dark](docs/dashboard-dark.png) |
 
 **节点详情**（`/node/:uuid`——趋势图 + 资源指标 + 探针延迟）
 
@@ -287,7 +289,7 @@ curl -X POST http://主控:8080/api/admin/nodes -H 'X-Admin-Token: <admin-token>
 |---|---|---|
 | `/api/admin/nodes` | GET / POST | 查看 / 手动添加服务器 |
 | `/api/admin/probes` | GET / POST / DELETE | 查看 / 配置 / 删除探针任务（`client=*` 全局 / `client=n1` 节点级） |
-| `/api/admin/alerts` | GET / POST / DELETE | 告警规则运行时 CRUD（kind/node/threshold） |
+| `/api/admin/alerts` | GET / POST / DELETE | 告警规则运行时 CRUD（kind/node/threshold/**mute_windows 静默时段**） |
 | `/agent/config` | GET | Agent 拉取远程配置（探针目标下发） |
 | `/admin/` | GET | **内置管理页**（节点/探针/告警可视化） |
 | `/agent/status` | POST | Agent 上报（`X-Auth-Token`） |

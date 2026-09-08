@@ -4,9 +4,11 @@ import { computed } from 'vue'
 import NodeCard from '@/components/NodeCard.vue'
 import { CardX } from '@/components/ui/card-x'
 import { useRealtime } from '@/composables/useRealtime'
+import { useTheme } from '@/composables/useTheme'
 import { formatBytes, formatSpeed } from '@/utils/format'
 
 const { nodes, statuses, connected, updatedAt } = useRealtime()
+const { theme, toggle: toggleTheme } = useTheme()
 
 const list = computed(() =>
   Object.entries(nodes.value).map(([uuid, node]) => ({ uuid, node, status: statuses.value[uuid] })),
@@ -39,6 +41,13 @@ const lastUpdated = computed(() => {
             {{ connected ? '实时' : '轮询' }}
           </span>
           <span>{{ lastUpdated }}</span>
+          <button
+            class="inline-flex items-center rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted"
+            :title="theme === 'dark' ? '切换亮色' : '切换暗色'"
+            @click="toggleTheme"
+          >
+            <Icon :icon="theme === 'dark' ? 'tabler:sun' : 'tabler:moon'" :width="15" />
+          </button>
         </div>
       </div>
     </header>
