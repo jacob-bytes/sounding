@@ -1,0 +1,32 @@
+# sounding 演示站配置（Fly.io）
+# 部署：fly launch --copy-config --name sounding-demo && fly volumes create sounding_data --size 1 && fly deploy
+app = "sounding-demo"
+primary_region = "hkg"   # 香港（国内访问较快）；可改 nrt（东京）/ sin（新加坡）
+
+[build]
+  # 用 GHCR 镜像（免构建）；也可删掉本行让 Fly 本地构建 Dockerfile
+  image = "ghcr.io/jacob-bytes/sounding:latest"
+
+[env]
+  SOUNDING_AGENT_TOKEN = "demo-agent-token"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "15s"
+  method = "GET"
+  path = "/healthz"
+
+[[mounts]]
+  source = "sounding_data"
+  destination = "/data"
+
+[processes]
+  app = "-addr :8080 -db /data/sounding.db -seed -static /admin -agent-token demo-agent-token -admin-token demo-admin-token -admin-user demo -admin-pass demo123 -retain-days 7"
