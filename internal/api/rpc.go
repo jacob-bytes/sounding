@@ -77,18 +77,18 @@ type StatusRecord struct {
 // Handler JSON-RPC 处理器（依赖注入 store）。
 type Handler struct {
 	store interface {
-		Nodes() ([]NodeRecord, error)
-		LatestStatus() ([]StatusRecord, error)
-		RecentStatus(client string, limit int) ([]StatusRecord, error)
+		Nodes() (map[string]Client, error)
+		LatestStatus() (map[string]NodeStatus, error)
+		RecentStatus(client string, limit int) (map[string]any, error)
 		PingRecords(client string, taskID int, limit int) ([]PingRecord, error)
 	}
 }
 
 // NewHandler 构建处理器。
 func NewHandler(s interface {
-	Nodes() ([]NodeRecord, error)
-	LatestStatus() ([]StatusRecord, error)
-	RecentStatus(client string, limit int) ([]StatusRecord, error)
+	Nodes() (map[string]Client, error)
+	LatestStatus() (map[string]NodeStatus, error)
+	RecentStatus(client string, limit int) (map[string]any, error)
 	PingRecords(client string, taskID int, limit int) ([]PingRecord, error)
 }) *Handler {
 	return &Handler{store: s}

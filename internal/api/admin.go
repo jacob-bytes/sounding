@@ -8,8 +8,8 @@ import (
 // AdminEndpoint 管理 API（添加服务器 / 探针配置——带 admin token）。
 type AdminEndpoint struct {
 	store interface {
-		AdminNodes() ([]NodeRecord, error)
-		AdminUpsertNode(n NodeRecord) error
+		AdminNodes() (map[string]Client, error)
+		AdminUpsertNode(n Client) error
 		AdminProbeTasks() ([]AdminProbe, error)
 		AdminUpsertProbe(client, target, name string, enabled bool) error
 	}
@@ -27,8 +27,8 @@ type AdminProbe struct {
 
 // NewAdminEndpoint 构建管理端点。
 func NewAdminEndpoint(s interface {
-	AdminNodes() ([]NodeRecord, error)
-	AdminUpsertNode(n NodeRecord) error
+	AdminNodes() (map[string]Client, error)
+	AdminUpsertNode(n Client) error
 	AdminProbeTasks() ([]AdminProbe, error)
 	AdminUpsertProbe(client, target, name string, enabled bool) error
 }, token string) *AdminEndpoint {
@@ -58,7 +58,7 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if r.Method == http.MethodPost {
-			var n NodeRecord
+			var n Client
 			if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
 				http.Error(w, "bad payload", http.StatusBadRequest)
 				return
