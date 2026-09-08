@@ -26,6 +26,10 @@
 
 ## 截图
 
+**监控面板**（`/`——sounding 自研，复用 ink 设计系统）
+
+![sounding dashboard](docs/dashboard.png)
+
 **内置管理页**（`/admin/`——节点 / 探针 / 告警规则，**亮/暗自选，默认亮色**）
 
 | 亮色（默认） | 暗色 |
@@ -346,9 +350,16 @@ docker compose up -d   # 主控（挂载 ./admin 为 ink 管理后台）
 # 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 → Release
 ```
 
-## 前端（ink 监控面板）
+## 前端
 
-sounding 的展示前端复用 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)：
+**sounding 自带监控面板**（`web/dashboard/`——Vue 3 + Vite + Tailwind，复用 ink 设计 token/组件）：
+
+```bash
+cd web/dashboard && bun install && bun run build   # 产物 dist/
+./sounding-server -static web/dashboard/dist       # 或放到 ./admin
+```
+
+也可挂载 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink) 主题作为替代面板：
 
 | 获取方式 | 命令 |
 |---|---|
