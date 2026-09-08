@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -125,6 +126,8 @@ func main() {
 
 	// ink 契约：JSON-RPC 2.0 POST <base>/rpc2
 	mux.Handle("/rpc2", h)
+	// ink 默认 API base 为 /api——同源别名
+	mux.Handle("/api/rpc2", h)
 	// 内置管理页（Go embed——无需前端构建）
 	mux.HandleFunc("/admin/", adminui.Handler())
 	// Agent 配置下发（远程拉取探针目标）
@@ -158,45 +161,36 @@ func main() {
 	mux.Handle("/api/admin/probes", adminH)
 	mux.Handle("/api/admin/alerts", adminH)
 	// ink 初始化端点（InitManager）
-	// ink 初始化端点（VITE_API_BASE 即 base——根路径）
+	// ink 初始化端点（根路径 + /api 前缀）
 	for _, p := range []string{"/me", "/public", "/version"} {
-		mux.HandleFunc(p, func(w http.ResponseWriter, _ *http.Request) {
-			switch p {
+		path := p
+		mux.HandleFunc(path, func(w http.ResponseWriter, _ *http.Request) {
+			switch path {
 			case "/me":
 				writeJSON(w, map[string]any{"logged_in": false})
 			case "/public":
-				writeJSON(w, map[string]any{
-					"status": "success",
-					"data": map[string]any{
-						"theme_settings": map[string]any{
-							"rpcTransportMode": "websocket", // ink 走 WS 实时通道
-						},
-						"record_enabled": true,
-						"sitename":       "sounding",
-						"description":    "sounding",
-						"custom_body":    "",
-						"custom_head":    "",
-						"allow_cors":     false,
-						"disable_password_login": true,
-						"oauth_enable":   false,
-						"oauth_provider": nil,
-						"private_site":   false,
-					},
-				})
+				publicSettingsHandler(w, nil)
 			case "/version":
 				writeJSON(w, map[string]any{"version": "0.1.0"})
 			}
 		})
 	}
+	// /api/* 与根路径同实现（ink 默认 base=/api）
 	mux.HandleFunc("/api/me", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"logged_in": false}) })
-	mux.HandleFunc("/api/public", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, map[string]any{"theme_settings": map[string]any{}, "record_enabled": true})
-	})
+	mux.HandleFunc("/api/public", publicSettingsHandler)
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"version": "0.1.0"}) })
-	// 管理后台（ink 前端构建产物）
+	// 监控面板（ink 前端构建产物）——-static 指定，或自动探测 ./admin、/var/lib/sounding/admin
+	if *staticDir == "" {
+		for _, cand := range []string{"./admin", "/var/lib/sounding/admin"} {
+			if st, err := os.Stat(cand); err == nil && st.IsDir() {
+				*staticDir = cand
+				break
+			}
+		}
+	}
 	if *staticDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(*staticDir)))
-		log.Printf("serving admin UI from %s", *staticDir)
+		log.Printf("serving ink dashboard from %s", *staticDir)
 	}
 
 	log.Printf("sounding server listening on %s (rpc2: /rpc2)", *addr)
@@ -206,6 +200,28 @@ func main() {
 }
 
 var alertMgr *alert.Manager
+
+// publicSettingsHandler ink 站点公开设置（含 WS 通道开关）。
+func publicSettingsHandler(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, map[string]any{
+		"status": "success",
+		"data": map[string]any{
+			"theme_settings": map[string]any{
+				"rpcTransportMode": "websocket", // ink 走 WS 实时通道
+			},
+			"record_enabled":         true,
+			"sitename":               "sounding",
+			"description":            "sounding",
+			"custom_body":            "",
+			"custom_head":            "",
+			"allow_cors":             false,
+			"disable_password_login": true,
+			"oauth_enable":           false,
+			"oauth_provider":         nil,
+			"private_site":           false,
+		},
+	})
+}
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")

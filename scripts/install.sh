@@ -50,6 +50,7 @@ function resolve_tag() {
 
 function check_deps() {
   command -v curl >/dev/null 2>&1 || die "缺少 curl"
+  command -v unzip >/dev/null 2>&1 || log "提示: 未找到 unzip——将跳过监控面板安装"
 }
 
 function install_bin() {
@@ -74,6 +75,30 @@ function install_bin() {
   log "✓ 已安装: $BIN_DIR/sounding-$role"
 }
 
+function install_ink_dashboard() {
+  # 安装 ink 监控面板（sounding-server 的展示前端）
+  ink_dir="${SOUNDING_ADMIN_DIR:-/var/lib/sounding/admin}"
+  ink_repo="jacob-bytes/komari-theme-ink"
+  ink_tag=$(curl -fsSL "https://api.github.com/repos/$ink_repo/releases/latest" \
+    | grep -o '"tag_name": *"[^"]*"' | head -1 | cut -d'"' -f4)
+  [ -n "$ink_tag" ] || die "未找到 ink Release"
+
+  log "→ 下载 ink 监控面板 ($ink_tag)"
+  tmpdir=$(mktemp -d)
+  curl -fsSL "https://github.com/$ink_repo/releases/download/$ink_tag/ink-build-${ink_tag#v}.zip" \
+    -o "$tmpdir/ink.zip" 2>/dev/null \
+    || curl -fsSL "$(curl -fsSL "https://api.github.com/repos/$ink_repo/releases/latest" \
+        | grep -o '"browser_download_url": *"[^"]*\.zip"' | head -1 | cut -d'"' -f4)" -o "$tmpdir/ink.zip" \
+    || die "ink 下载失败"
+  unzip -q -o "$tmpdir/ink.zip" -d "$tmpdir/ink" || die "解压失败（需要 unzip）"
+  rm -rf "$tmpdir/ink.zip"
+
+  mkdir -p "$ink_dir"
+  cp -r "$tmpdir/ink/dist/." "$ink_dir/" 2>/dev/null || die "未找到 ink dist 目录"
+  rm -rf "$tmpdir"
+  log "✓ 监控面板已安装: $ink_dir"
+}
+
 function print_usage_hint() {
   role=$1
   shift
@@ -84,7 +109,8 @@ function print_usage_hint() {
     log "    -agent-token <agent-token> -admin-token <admin-token> \\"
     log "    -admin-pass <password> -telegram-token <bot> -telegram-chat-id <id>"
     log ""
-    log "管理页: http://localhost:8080/admin/"
+    log "管理页:   http://localhost:8080/admin/"
+    log "监控面板: http://localhost:8080/  （ink 已自动安装到 /var/lib/sounding/admin）"
   else
     log "  sounding-agent -server http://<主控>:8080 -token <token> -node-uuid \$(hostname) $*"
     log ""
@@ -103,6 +129,9 @@ function main() {
   esac
   check_deps
   install_bin "$role"
+  if [ "$role" = "server" ]; then
+    install_ink_dashboard
+  fi
   print_usage_hint "$role" "$@"
 }
 

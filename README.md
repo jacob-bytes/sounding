@@ -121,11 +121,16 @@ scripts/           一键安装脚本
 
 ## 主控部署（sounding-server）
 
-### 方式一：一键脚本（推荐）
+### 方式一：一键脚本（推荐——含 ink 监控面板）
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | sh -s -- server
 ```
+
+脚本会自动完成：
+1. 下载 `sounding-server`（按 OS/架构）
+2. **下载 ink 监控面板** → `/var/lib/sounding/admin`（sounding 自动挂载）
+3. 打印启动命令（管理页 + 面板地址）
 
 ### 方式二：Docker
 
@@ -162,7 +167,7 @@ go build -o sounding-server ./cmd/server
 | 入口 | 地址 |
 |---|---|
 | **管理页** | `http://<主机>:8080/admin/`（首次访问输入 Admin Token） |
-| ink 监控面板 | `http://<主机>:8080/`（需 `-static` 挂载 ink 构建产物） |
+| **ink 监控面板** | `http://<主机>:8080/`（一键脚本自动安装；或 `-static <ink-dist>`） |
 | 健康检查 | `http://<主机>:8080/healthz` |
 | Agent 接入 | 各节点执行 `sounding-agent -server http://<主机>:8080 -token <agent-token>` |
 
@@ -282,6 +287,18 @@ SOUNDING_PROBES="上海移动:223.5.5.5,腾讯 DNS:119.29.29.29" \
 docker compose up -d   # 主控（挂载 ./admin 为 ink 管理后台）
 # 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 → Release
 ```
+
+## 前端（ink 监控面板）
+
+sounding 的展示前端复用 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)：
+
+| 获取方式 | 命令 |
+|---|---|
+| **一键脚本**（推荐） | `install.sh server` 自动下载到 `/var/lib/sounding/admin` |
+| 手动下载 Release | 解压 `ink-build-*.zip` → `dist/` 放到 `./admin` 或 `-static` 指定 |
+| 源码构建 | `cd komari-theme-ink && bun run build` → `-static ./dist` |
+
+**零配置**：ink 默认 API base 为 `/api`，sounding 已提供同源 `/api/rpc2` 别名——**无需改 ink**。
 
 ## 与 ink 前端联调
 
