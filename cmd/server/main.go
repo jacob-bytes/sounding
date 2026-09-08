@@ -6,7 +6,9 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"time"
 
+	"github.com/jacob-bytes/sounding/internal/alert"
 	"github.com/jacob-bytes/sounding/internal/api"
 	"github.com/jacob-bytes/sounding/internal/probe"
 	"github.com/jacob-bytes/sounding/internal/store"
@@ -19,6 +21,9 @@ func main() {
 	agentToken := flag.String("agent-token", "sounding-demo-token", "Agent 上报认证 token")
 	probeClient := flag.String("probe-client", "demo-001", "探针记录挂载的 client uuid")
 	adminToken := flag.String("admin-token", "", "管理 API token（为空=不启用认证）")
+	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭告警）")
+	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
+	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
 	staticDir := flag.String("static", "", "前端静态目录（ink 构建产物——可选，提供管理后台）")
 	flag.Parse()
 
@@ -33,6 +38,19 @@ func main() {
 		}
 	}
 
+	// 告警（可选）
+	if *alertWebhook != "" {
+		rules := []alert.Rule{}
+		if *alertOffline {
+			rules = append(rules, alert.Rule{Kind: "offline", Node: "*", Threshold: 1, Webhook: *alertWebhook})
+		}
+		if *alertLatency > 0 {
+			rules = append(rules, alert.Rule{Kind: "latency", Node: "*", Threshold: *alertLatency, Webhook: *alertWebhook})
+		}
+		rules = append(rules, alert.Rule{Kind: "loss", Node: "*", Threshold: 100, Webhook: *alertWebhook})
+		alertMgr = alert.NewManager(rules, 5*time.Minute)
+	}
+
 	// 演示探针种子
 	if *seed {
 		_ = st.SeedProbeTasks()
@@ -41,6 +59,10 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sched.Start(ctx)
+	if alertMgr != nil {
+		go alert.Watch(ctx, st, alertMgr, 30*time.Second)
+		log.Printf("alerts enabled → %s", *alertWebhook)
+	}
 
 	h := api.NewHandler(st)
 	agentH := api.NewAgentEndpoint(st, *agentToken)
@@ -99,6 +121,8 @@ func main() {
 		log.Fatal(err)
 	}
 }
+
+var alertMgr *alert.Manager
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")

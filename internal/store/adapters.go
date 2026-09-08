@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jacob-bytes/sounding/internal/alert"
 	"github.com/jacob-bytes/sounding/internal/api"
 	"github.com/jacob-bytes/sounding/internal/probe"
 )
@@ -268,4 +269,33 @@ func (s *Store) AdminUpsertProbe(client, target, name string, enabled bool) erro
 		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, enabled=excluded.enabled`,
 		client, target, name, e)
 	return err
+}
+
+// AlertSnapshots 提供告警判定所需的节点快照。
+func (s *Store) AlertSnapshots() ([]alert.Snapshot, error) {
+	statuses, err := s.LatestStatus()
+	if err != nil {
+		return nil, err
+	}
+	clients, err := s.Nodes()
+	if err != nil {
+		return nil, err
+	}
+	var out []alert.Snapshot
+	for uuid, st := range statuses {
+		name := uuid
+		if c, ok := clients[uuid]; ok {
+			name = c.Name
+		}
+		snap := alert.Snapshot{UUID: uuid, Name: name, Online: st.Online, Ping: map[string]float64{}, Loss: map[string]float64{}}
+		if t, err := time.Parse(time.RFC3339, st.Time); err == nil {
+			snap.LastSeen = t
+		}
+		for _, p := range st.Ping {
+			snap.Ping[p.Name] = p.Latest
+			snap.Loss[p.Name] = p.Loss
+		}
+		out = append(out, snap)
+	}
+	return out, nil
 }
