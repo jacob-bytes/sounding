@@ -83,6 +83,7 @@
       </div>
       <div><label>名称</label><input id="p-name" placeholder="上海移动"></div>
       <div><label>目标</label><input id="p-target" placeholder="223.5.5.5 / https://x.com / a.com@8.8.8.8"></div>
+      <div><label>间隔(秒)</label><input id="p-interval" type="number" value="60" style="width:90px"></div>
       <button onclick="addProbe()">添加探针</button>
     </div>
     <div class="status" id="probe-status"></div>
@@ -128,18 +129,8 @@ function api(path, opts = {}) {
 async function loadNodes() {
   try {
     const d = await api('/api/admin/nodes');
-    const rows = Object.entries(d.nodes || {});
-    document.querySelector('#nodes tbody').innerHTML = rows.map(([uuid, n]) => {
-      const st = (d.statuses && d.statuses[uuid]) || {};
-      const cpu = st.cpu != null ? st.cpu.toFixed(1) + '%' : '—';
-      const ram = st.ram != null ? (st.ram / 1073741824).toFixed(1) + ' GB' : '—';
-      const temp = st.temp ? st.temp.toFixed(1) + '°C' : '—';
-      return `<tr><td>${n.name || '—'}</td><td><code>${uuid}</code></td><td>${n.region || '—'}</td>
-        <td>${st.online ? '<span class="tag on">在线</span>' : '<span class="tag">离线</span>'}</td><td><code>${cpu}</code></td><td><code>${ram}</code></td><td><code>${temp}</code></td>
-        <td><button class="danger" onclick="delNode('${uuid}')">删除</button></td></tr>`;
-    }).join('') || '<tr><td colspan="8" class="muted">暂无节点</td></tr>';
-    document.getElementById('nodeCount').textContent = rows.length + ' 台';
-    document.getElementById('stat').textContent = '运行中 · ' + rows.length + ' 节点';
+    renderNodes(d.nodes, d.statuses);
+    document.getElementById('stat').textContent = '运行中 · ' + Object.keys(d.nodes || {}).length + ' 节点';
   } catch (e) { document.getElementById('stat').textContent = '需要管理 Token'; }
 }
 async function loadProbes() {
@@ -162,12 +153,23 @@ async function loadAlerts() {
       || '<tr><td colspan="4" class="muted">暂无规则</td></tr>';
   } catch (e) {}
 }
+async function editNode(uuid) {
+  const d = await api('/api/admin/nodes');
+  const n = (d.nodes || {})[uuid];
+  if (!n) return;
+  document.getElementById('n-uuid').value = uuid;
+  document.getElementById('n-name').value = n.name || '';
+  document.getElementById('n-region').value = n.region || '';
+  document.getElementById('n-uuid').setAttribute('readonly', 'readonly');
+  document.getElementById('node-status').textContent = '编辑模式（修改后点添加保存）';
+}
 async function addNode() {
   const uuid = document.getElementById('n-uuid').value.trim();
   const name = document.getElementById('n-name').value.trim();
   if (!uuid || !name) return;
   await api('/api/admin/nodes', { method: 'POST', body: JSON.stringify({ uuid, name, region: document.getElementById('n-region').value.trim() }) });
-  document.getElementById('node-status').textContent = '✓ 已添加';
+  document.getElementById('node-status').textContent = '✓ 已保存';
+  document.getElementById('n-uuid').removeAttribute('readonly');
   loadNodes();
 }
 async function addProbe() {
@@ -175,7 +177,7 @@ async function addProbe() {
   const name = document.getElementById('p-name').value.trim();
   const target = document.getElementById('p-target').value.trim();
   if (!name || !target) return;
-  await api('/api/admin/probes', { method: 'POST', body: JSON.stringify({ client, name, target, type: document.getElementById('p-type').value, enabled: true }) });
+  await api('/api/admin/probes', { method: 'POST', body: JSON.stringify({ client, name, target, type: document.getElementById('p-type').value, interval_sec: Number(document.getElementById('p-interval').value) || 60, enabled: true }) });
   document.getElementById('probe-status').textContent = '✓ 已添加';
   loadProbes();
 }
@@ -205,8 +207,51 @@ async function delAlert(kind, node) {
   await api('/api/admin/alerts', { method: 'DELETE', body: JSON.stringify({ kind, node }) });
   loadAlerts();
 }
+// ===== 实时通道（WS 推送 statuses+nodes，失败回退轮询）=====
+let ws = null;
+let wsRetry = 0;
+function connectWS() {
+  try {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    ws = new WebSocket(proto + '//' + location.host + '/rpc2');
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.method === 'sounding.push' && msg.params) {
+          renderNodes(msg.params.nodes, msg.params.statuses);
+          document.getElementById('stat').textContent = '实时 · ' + Object.keys(msg.params.nodes || {}).length + ' 节点 · ' + new Date(msg.params.time).toLocaleTimeString();
+        }
+      } catch (e) {}
+    };
+    ws.onclose = () => {
+      ws = null;
+      wsRetry++;
+      if (wsRetry <= 5) setTimeout(connectWS, 3000);
+      else setInterval(loadNodes, 10000); // 长期失败回退轮询
+    };
+    ws.onerror = () => { if (ws) ws.close(); };
+  } catch (e) { setInterval(loadNodes, 10000); }
+}
+
+// 抽出渲染函数（WS 推送与 HTTP 加载共用）
+function renderNodes(nodes, statuses) {
+  const rows = Object.entries(nodes || {});
+  document.querySelector('#nodes tbody').innerHTML = rows.map(([uuid, n]) => {
+    const st = (statuses && statuses[uuid]) || {};
+    const cpu = st.cpu != null ? st.cpu.toFixed(1) + '%' : '—';
+    const ram = st.ram != null ? (st.ram / 1073741824).toFixed(1) + ' GB' : '—';
+    const temp = st.temp ? st.temp.toFixed(1) + '°C' : '—';
+    return `<tr><td>${n.name || '—'}</td><td><code>${uuid}</code></td><td>${n.region || '—'}</td>
+      <td>${st.online ? '<span class="tag on">在线</span>' : '<span class="tag">离线</span>'}</td>
+      <td><code>${cpu}</code></td><td><code>${ram}</code></td><td><code>${temp}</code></td>
+      <td><button class="ghost" onclick="editNode('${uuid}')">编辑</button>
+          <button class="danger" onclick="delNode('${uuid}')">删除</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="muted">暂无节点</td></tr>';
+  document.getElementById('nodeCount').textContent = rows.length + ' 台';
+}
+
 loadNodes(); loadProbes(); loadAlerts();
-setInterval(loadNodes, 10000);
+connectWS();
 </script>
 </body>
 </html>

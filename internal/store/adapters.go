@@ -259,18 +259,26 @@ func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
 	return out, rows.Err()
 }
 
-// AdminUpsertProbe 管理视角创建/更新探针（typ: icmp|tcp|http|dns）。
+// AdminUpsertProbe 管理视角创建/更新探针（默认 60s）。
 func (s *Store) AdminUpsertProbe(client, target, name, typ string, enabled bool) error {
+	return s.AdminUpsertProbeInterval(client, target, name, typ, 60, enabled)
+}
+
+// AdminUpsertProbeInterval 创建/更新探针（可指定间隔秒）。
+func (s *Store) AdminUpsertProbeInterval(client, target, name, typ string, intervalSec float64, enabled bool) error {
 	if typ == "" {
 		typ = "icmp"
+	}
+	if intervalSec <= 0 {
+		intervalSec = 60
 	}
 	e := 0
 	if enabled {
 		e = 1
 	}
-	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, name, type, interval_sec, enabled) VALUES (?,?,?,?,60,?)
-		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, type=excluded.type, enabled=excluded.enabled`,
-		client, target, name, typ, e)
+	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, name, type, interval_sec, enabled) VALUES (?,?,?,?,?,?)
+		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, type=excluded.type, interval_sec=excluded.interval_sec, enabled=excluded.enabled`,
+		client, target, name, typ, intervalSec, e)
 	return err
 }
 

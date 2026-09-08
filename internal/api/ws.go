@@ -22,6 +22,8 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 	log.Printf("ws client connected: %s", r.RemoteAddr)
+	stop := h.startPush(conn)
+	defer close(stop)
 
 	for {
 		_, msg, err := conn.ReadMessage()

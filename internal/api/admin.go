@@ -11,7 +11,7 @@ type AdminEndpoint struct {
 		AdminNodes() (map[string]Client, error)
 		AdminUpsertNode(n Client) error
 		AdminProbeTasks() ([]AdminProbe, error)
-		AdminUpsertProbe(client, target, name, typ string, enabled bool) error
+		AdminUpsertProbeInterval(client, target, name, typ string, intervalSec float64, enabled bool) error
 		AdminDeleteProbe(client, name string) error
 		AdminDeleteNode(uuid string) error
 		AdminProbeTaskNames(client string) ([]string, error)
@@ -46,7 +46,7 @@ func NewAdminEndpoint(s interface {
 	AdminNodes() (map[string]Client, error)
 	AdminUpsertNode(n Client) error
 	AdminProbeTasks() ([]AdminProbe, error)
-	AdminUpsertProbe(client, target, name, typ string, enabled bool) error
+	AdminUpsertProbeInterval(client, target, name, typ string, intervalSec float64, enabled bool) error
 	AdminDeleteProbe(client, name string) error
 	AdminDeleteNode(uuid string) error
 	AdminProbeTaskNames(client string) ([]string, error)
@@ -166,11 +166,12 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if r.Method == http.MethodPost {
 			var p struct {
-				Client  string `json:"client"`
-				Target  string `json:"target"`
-				Name    string `json:"name"`
-				Type    string `json:"type"`
-				Enabled *bool  `json:"enabled"`
+				Client      string  `json:"client"`
+				Target      string  `json:"target"`
+				Name        string  `json:"name"`
+				Type        string  `json:"type"`
+				IntervalSec float64 `json:"interval_sec"`
+				Enabled     *bool   `json:"enabled"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				http.Error(w, "bad payload", http.StatusBadRequest)
@@ -180,7 +181,11 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if p.Enabled != nil {
 				enabled = *p.Enabled
 			}
-			if err := h.store.AdminUpsertProbe(p.Client, p.Target, p.Name, p.Type, enabled); err != nil {
+			interval := p.IntervalSec
+			if interval <= 0 {
+				interval = 60
+			}
+			if err := h.store.AdminUpsertProbeInterval(p.Client, p.Target, p.Name, p.Type, interval, enabled); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
