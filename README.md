@@ -28,7 +28,7 @@
 - **sounding-agent**：节点端采集（CPU/内存/磁盘/网络/系统/uptime）定时上报
 - **契约**：`contracts/contracts.md`（字段级——以 ink 为金标准）
 
-## 快速开始（M1：主控 + 演示数据）
+## 快速开始（M1+M2：主控 + Agent）
 
 ```bash
 go build -o sounding-server ./cmd/server
@@ -41,6 +41,14 @@ go build -o sounding-server ./cmd/server
 curl -X POST http://localhost:8080/rpc2 -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":1,"method":"getNodes","params":{}}'
 # → result: [{"uuid":"demo-001","name":"Demo 节点 · 本地",...}]
+```
+
+### Agent（M2）
+
+```bash
+go build -o sounding-agent ./cmd/agent
+./sounding-agent -server http://localhost:8080 -token sounding-demo-token -interval 15s
+# 首次上报自动注册节点；上报即心跳（离线 = 超时无上报）
 ```
 
 接入 ink 前端（`.env` 设置 `VITE_API_BASE=http://localhost:8080`）——首页/详情即跑通。
