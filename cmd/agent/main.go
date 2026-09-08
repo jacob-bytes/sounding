@@ -78,5 +78,5 @@ func report(ctx context.Context, server, token, uuid string, info collect.OSInfo
 		return
 	}
 	defer resp.Body.Close()
-	log.Printf("上报完成: %s (http %d)", snap.CPU, resp.StatusCode)
+	log.Printf("上报完成: %.1f%% (http %d)", snap.CPU, resp.StatusCode)
 }
