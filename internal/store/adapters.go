@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/jacob-bytes/sounding/internal/api"
+	"github.com/jacob-bytes/sounding/internal/probe"
 )
 
 // Nodes 返回全部节点（含在线/uptime 估算）。
@@ -82,4 +83,52 @@ func (s *Store) UpsertNode(uuid, name, _ string) error {
 		ON CONFLICT(uuid) DO UPDATE SET name=excluded.name`,
 		uuid, name, "unknown", "unknown", "sounding-agent", "UNKNOWN", 1, 0, 0, 0, 0, "USD", "", "agent", "", "sounding-agent 节点")
 	return err
+}
+
+// ProbeTasks 返回启用的探针任务。
+func (s *Store) ProbeTasks() ([]probe.Task, error) {
+	rows, err := s.db.Query(`SELECT id, target, type, name, interval_sec, enabled FROM probe_tasks ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []probe.Task
+	for rows.Next() {
+		var t probe.Task
+		var intervalSec float64
+		var enabled int
+		if err := rows.Scan(&t.ID, &t.Target, &t.Type, &t.Name, &intervalSec, &enabled); err != nil {
+			return nil, err
+		}
+		t.Interval = time.Duration(intervalSec * float64(time.Second))
+		t.Enabled = enabled == 1
+		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+// InsertProbe 写入探针记录。
+func (s *Store) InsertProbe(client string, taskID int, timeStr string, value float64) error {
+	_, err := s.db.Exec(`INSERT INTO probe_records (client, task_id, time, value) VALUES (?,?,?,?)`,
+		client, taskID, timeStr, value)
+	return err
+}
+
+// PingRecords 返回指定 client/task 的探针记录（升序，limit 150）。
+func (s *Store) PingRecords(client string, taskID int, limit int) ([]api.PingRecord, error) {
+	rows, err := s.db.Query(`SELECT client, task_id, time, value FROM (SELECT * FROM probe_records WHERE client=? AND task_id=? ORDER BY time DESC LIMIT ?) ORDER BY time ASC`,
+		client, taskID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []api.PingRecord
+	for rows.Next() {
+		var r api.PingRecord
+		if err := rows.Scan(&r.Client, &r.TaskID, &r.Time, &r.Value); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

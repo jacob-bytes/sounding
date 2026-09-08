@@ -22,6 +22,9 @@ func Open(path string) (*Store, error) {
 	if err := s.migrate(); err != nil {
 		return nil, err
 	}
+	if err := s.ensureProbeTables(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -92,5 +95,43 @@ func (s *Store) Seed() error {
 	return nil
 }
 
+// SeedProbeTasks 写入默认探针任务（演示三网感知）。
+func (s *Store) SeedProbeTasks() error {
+	for _, t := range []struct{ target, name string }{
+		{"223.5.5.5", "阿里 DNS"},
+		{"119.29.29.29", "腾讯 DNS"},
+		{"1.1.1.1", "Cloudflare DNS"},
+	} {
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO probe_tasks (target, name, interval_sec, enabled) VALUES (?,?,60,1)`, t.target, t.name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Close 关闭数据库。
 func (s *Store) Close() error { return s.db.Close() }
+
+// ---- 探针表 ----
+
+// ensureProbeTables 创建探针相关表（migrate 后追加）。
+func (s *Store) ensureProbeTables() error {
+	_, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS probe_tasks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  target TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'ping',
+  name TEXT NOT NULL DEFAULT '',
+  interval_sec REAL NOT NULL DEFAULT 60,
+  enabled INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS probe_records (
+  client TEXT NOT NULL,
+  task_id INTEGER NOT NULL,
+  time TEXT NOT NULL,
+  value REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_probe_client_task_time ON probe_records(client, task_id, time);
+`)
+	return err
+}

@@ -26,6 +26,8 @@
 
 - **sounding-server**：接收 Agent 上报 + 历史存储 + 暴露 Komari 兼容 RPC（ink 零改动接入）
 - **sounding-agent**：节点端采集（CPU/内存/磁盘/网络/系统/uptime）定时上报
+- **探针调度器**：Ping（TCP 拨号延迟）/HTTP 探针任务——结果经 `getPingRecords` 暴露给 ink 前端
+- **管理后台**：`-static <ink-dist>` 直接挂载 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink) 构建产物——**ink 前端即管理后台**
 - **契约**：`contracts/contracts.md`（字段级——以 ink 为金标准）
 
 ## 快速开始（M1+M2：主控 + Agent）
@@ -51,7 +53,13 @@ go build -o sounding-agent ./cmd/agent
 # 首次上报自动注册节点；上报即心跳（离线 = 超时无上报）
 ```
 
-接入 ink 前端（`.env` 设置 `VITE_API_BASE=http://localhost:8080`）——首页/详情即跑通。
+接入 ink 前端（`.env` 设置 `VITE_API_BASE=http://localhost:8080`）——首页/详情即跑通：
+
+```bash
+# 完整运行（主控 + 探针 + 管理后台）
+./sounding-server -addr :8080 -db sounding.db -static ./ink-dist
+# → http://localhost:8080 即 ink 管理后台（图表/探针/节点全可看）
+```
 
 ## 路线图
 

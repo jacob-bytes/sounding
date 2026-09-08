@@ -79,6 +79,7 @@ type Handler struct {
 		Nodes() ([]NodeRecord, error)
 		LatestStatus() ([]StatusRecord, error)
 		RecentStatus(client string, limit int) ([]StatusRecord, error)
+		PingRecords(client string, taskID int, limit int) ([]PingRecord, error)
 	}
 }
 
@@ -87,6 +88,7 @@ func NewHandler(s interface {
 	Nodes() ([]NodeRecord, error)
 	LatestStatus() ([]StatusRecord, error)
 	RecentStatus(client string, limit int) ([]StatusRecord, error)
+	PingRecords(client string, taskID int, limit int) ([]PingRecord, error)
 }) *Handler {
 	return &Handler{store: s}
 }
@@ -103,13 +105,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var err error
 	switch req.Method {
 	case "getMethods":
-		result = []string{"getMethods", "getVersion", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus"}
+		result = []string{"getMethods", "getVersion", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus", "getPingRecords"}
 	case "getVersion":
 		result = map[string]string{"version": "0.1.0"}
 	case "getNodes":
 		result, err = h.store.Nodes()
 	case "getNodesLatestStatus":
 		result, err = h.store.LatestStatus()
+	case "getPingRecords":
+		var p struct {
+			Client string `json:"client"`
+			TaskID int    `json:"task_id"`
+			Limit  int    `json:"limit"`
+		}
+		_ = json.Unmarshal(req.Params, &p)
+		if p.Limit <= 0 {
+			p.Limit = 150
+		}
+		result, err = h.store.PingRecords(p.Client, p.TaskID, p.Limit)
 	case "getNodeRecentStatus":
 		var p struct {
 			Client string `json:"client"`
@@ -142,4 +155,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func writeErr(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
 	_ = json.NewEncoder(w).Encode(RPCResponse{JSONRPC: "2.0", ID: id, Error: &RPCError{Code: code, Message: msg}})
+}
+
+// PingRecord 探针记录（契约）。
+type PingRecord struct {
+	Client string  `json:"client"`
+	TaskID int     `json:"task_id"`
+	Time   string  `json:"time"`
+	Value  float64 `json:"value"`
 }
