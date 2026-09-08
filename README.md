@@ -82,6 +82,45 @@ internal/collect  Agent 采集（M2）
 contracts/        RPC 契约清单（字段级）
 ```
 
+
+
+## 配置手册（M4）
+
+### 添加服务器（两种方式）
+
+**① 一键自动**：Agent 启动即自动注册（推荐）：
+
+```bash
+./sounding-agent -server http://主控:8080 -token <agent-token> -node-uuid n1
+```
+
+**② 手动 API**：
+
+```bash
+curl -X POST http://主控:8080/api/admin/nodes -H 'X-Admin-Token: <admin-token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"uuid":"manual-01","name":"东京节点","region":"JP","cpu_cores":4,"mem_total":8589934592}'
+```
+
+### 不同服务器不同延迟目标（per-node）
+
+```bash
+# Agent 启动参数声明本节点测试目标（"名称:主机" 逗号分隔）
+./sounding-agent -server http://主控:8080 -node-uuid n1 \
+  -probe "上海移动:223.5.5.5,腾讯 DNS:119.29.29.29"
+```
+→ 主控自动创建 `client=n1` 的探针任务（与全局任务共存，结果经 getPingRecords 返回）
+
+**管理 API 一览**：
+
+| 端点 | 方法 | 用途 |
+|---|---|---|
+| `/api/admin/nodes` | GET / POST | 查看 / 手动添加服务器 |
+| `/api/admin/probes` | GET / POST | 查看 / 配置探针任务（`client=*` 全局 / `client=n1` 节点级） |
+| `/agent/status` | POST | Agent 上报（`X-Auth-Token`） |
+
+> 认证：管理 API 用 `-admin-token`；Agent 上报用 `-agent-token`。
+
 ## 致谢
 
 - 前端契约金标准：[komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)
