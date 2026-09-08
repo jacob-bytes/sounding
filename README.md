@@ -14,6 +14,12 @@
 
 ---
 
+## 截图
+
+**内置管理页**（`/admin/`——节点 / 探针 / 告警规则）
+
+![sounding admin](docs/admin.png)
+
 ## 架构
 
 ```text
@@ -111,6 +117,71 @@ scripts/           一键安装脚本
 ```
 
 
+
+
+## 主控部署（sounding-server）
+
+### 方式一：一键脚本（推荐）
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | sh -s -- server
+```
+
+### 方式二：Docker
+
+```bash
+docker run -d --name sounding \
+  -p 8080:8080 \
+  -v sounding-data:/data \
+  -e SOUNDING_AGENT_TOKEN=changeme-agent \
+  -e SOUNDING_ADMIN_TOKEN=changeme-admin \
+  ghcr.io/jacob-bytes/sounding:latest
+
+# 带 ink 监控面板（挂载前端构建产物）
+docker run -d -p 8080:8080 -v sounding-data:/data -v ./ink-dist:/admin \
+  ghcr.io/jacob-bytes/sounding:latest -static /admin
+```
+
+### 方式三：二进制 / 源码
+
+```bash
+# 下载对应平台二进制（Releases 页）或本地编译
+go build -o sounding-server ./cmd/server
+
+./sounding-server \
+  -addr :8080 \
+  -db /var/lib/sounding/sounding.db \
+  -agent-token <agent-token> \
+  -admin-token <admin-token> \
+  -admin-user admin -admin-pass <password> \
+  -retain-days 30
+```
+
+### 部署后
+
+| 入口 | 地址 |
+|---|---|
+| **管理页** | `http://<主机>:8080/admin/`（首次访问输入 Admin Token） |
+| ink 监控面板 | `http://<主机>:8080/`（需 `-static` 挂载 ink 构建产物） |
+| 健康检查 | `http://<主机>:8080/healthz` |
+| Agent 接入 | 各节点执行 `sounding-agent -server http://<主机>:8080 -token <agent-token>` |
+
+### systemd 示例
+
+```ini
+[Unit]
+Description=sounding server
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/sounding-server -addr :8080 -db /var/lib/sounding/sounding.db \
+  -agent-token <agent-token> -admin-token <admin-token> -retain-days 30
+Restart=always
+User=sounding
+
+[Install]
+WantedBy=multi-user.target
+```
 
 ## 配置手册
 
