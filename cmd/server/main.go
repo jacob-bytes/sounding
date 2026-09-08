@@ -10,6 +10,7 @@ import (
 
 	"github.com/jacob-bytes/sounding/internal/alert"
 	"github.com/jacob-bytes/sounding/internal/api"
+	"github.com/jacob-bytes/sounding/internal/notify"
 	"github.com/jacob-bytes/sounding/internal/probe"
 	"github.com/jacob-bytes/sounding/internal/store"
 )
@@ -21,7 +22,9 @@ func main() {
 	agentToken := flag.String("agent-token", "sounding-demo-token", "Agent 上报认证 token")
 	probeClient := flag.String("probe-client", "demo-001", "探针记录挂载的 client uuid")
 	adminToken := flag.String("admin-token", "", "管理 API token（为空=不启用认证）")
-	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭告警）")
+	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭该渠道）")
+	tgToken := flag.String("telegram-token", "", "Telegram Bot Token（与 chat-id 同时提供则启用）")
+	tgChat := flag.String("telegram-chat-id", "", "Telegram Chat ID")
 	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
 	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
 	retainDays := flag.Int("retain-days", 30, "历史数据保留天数（0=永久）")
@@ -43,16 +46,26 @@ func main() {
 	}
 
 	// 告警（可选）
-	if *alertWebhook != "" {
-		rules := []alert.Rule{}
-		if *alertOffline {
-			rules = append(rules, alert.Rule{Kind: "offline", Node: "*", Threshold: 1, Webhook: *alertWebhook})
+	{
+		var notifiers []notify.Notifier
+		if *alertWebhook != "" {
+			notifiers = append(notifiers, notify.NewWebhook(*alertWebhook))
 		}
-		if *alertLatency > 0 {
-			rules = append(rules, alert.Rule{Kind: "latency", Node: "*", Threshold: *alertLatency, Webhook: *alertWebhook})
+		if *tgToken != "" && *tgChat != "" {
+			notifiers = append(notifiers, notify.NewTelegram(*tgToken, *tgChat))
 		}
-		rules = append(rules, alert.Rule{Kind: "loss", Node: "*", Threshold: 100, Webhook: *alertWebhook})
-		alertMgr = alert.NewManager(rules, 5*time.Minute)
+		if len(notifiers) > 0 {
+			rules := []alert.Rule{}
+			if *alertOffline {
+				rules = append(rules, alert.Rule{Kind: "offline", Node: "*", Threshold: 1})
+			}
+			if *alertLatency > 0 {
+				rules = append(rules, alert.Rule{Kind: "latency", Node: "*", Threshold: *alertLatency})
+			}
+			rules = append(rules, alert.Rule{Kind: "loss", Node: "*", Threshold: 100})
+			alertMgr = alert.NewManager(rules, notifiers, 5*time.Minute)
+			log.Printf("alerts enabled: %d 渠道", len(notifiers))
+		}
 	}
 
 	// 演示探针种子
@@ -107,8 +120,10 @@ func main() {
 				writeJSON(w, map[string]any{
 					"status": "success",
 					"data": map[string]any{
-						"theme_settings": map[string]any{},
-						"record_enabled":  true,
+						"theme_settings": map[string]any{
+							"rpcTransportMode": "websocket", // ink 走 WS 实时通道
+						},
+						"record_enabled": true,
 						"sitename":       "sounding",
 						"description":    "sounding",
 						"custom_body":    "",
