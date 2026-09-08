@@ -13,6 +13,7 @@ type AdminEndpoint struct {
 		AdminProbeTasks() ([]AdminProbe, error)
 		AdminUpsertProbe(client, target, name, typ string, enabled bool) error
 		AdminDeleteProbe(client, name string) error
+		AdminDeleteNode(uuid string) error
 		AdminProbeTaskNames(client string) ([]string, error)
 	}
 	statuses func() any
@@ -47,6 +48,7 @@ func NewAdminEndpoint(s interface {
 	AdminProbeTasks() ([]AdminProbe, error)
 	AdminUpsertProbe(client, target, name, typ string, enabled bool) error
 	AdminDeleteProbe(client, name string) error
+	AdminDeleteNode(uuid string) error
 	AdminProbeTaskNames(client string) ([]string, error)
 }, token string) *AdminEndpoint {
 	return &AdminEndpoint{store: s, token: token}
@@ -89,6 +91,21 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			if err := h.store.AdminUpsertNode(n); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+			return
+		}
+		if r.Method == http.MethodDelete {
+			var n struct {
+				UUID string `json:"uuid"`
+			}
+			if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
+				http.Error(w, "bad payload", http.StatusBadRequest)
+				return
+			}
+			if err := h.store.AdminDeleteNode(n.UUID); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}

@@ -41,7 +41,7 @@
 
   <div class="card">
     <h2>节点 <span id="nodeCount"></span></h2>
-    <table id="nodes"><thead><tr><th>名称</th><th>UUID</th><th>区域</th><th>状态</th><th>CPU</th><th>内存</th></tr></thead><tbody></tbody></table>
+    <table id="nodes"><thead><tr><th>名称</th><th>UUID</th><th>区域</th><th>状态</th><th>CPU</th><th>内存</th><th>温度</th><th></th></tr></thead><tbody></tbody></table>
   </div>
 
   <div class="card">
@@ -57,11 +57,19 @@
 
   <div class="card">
     <h2>探针任务 <span>client=* 为全局，否则为节点级</span></h2>
-    <table id="probes"><thead><tr><th>归属</th><th>名称</th><th>目标</th><th>状态</th><th></th></tr></thead><tbody></tbody></table>
-    <div class="row" style="margin-top:12px">
+    <table id="probes"><thead><tr><th>归属</th><th>类型</th><th>名称</th><th>目标</th><th>状态</th><th></th></tr></thead><tbody></tbody></table>
+    <div class="row" style="margin-top:12px; grid-template-columns: 1fr 1fr 1fr 1.2fr auto">
       <div><label>归属 client</label><input id="p-client" value="*"></div>
+      <div><label>类型</label>
+        <select id="p-type">
+          <option value="icmp">icmp（延迟）</option>
+          <option value="tcp">tcp（端口）</option>
+          <option value="http">http（状态码）</option>
+          <option value="dns">dns（解析）</option>
+        </select>
+      </div>
       <div><label>名称</label><input id="p-name" placeholder="上海移动"></div>
-      <div><label>目标主机</label><input id="p-target" placeholder="223.5.5.5"></div>
+      <div><label>目标</label><input id="p-target" placeholder="223.5.5.5 / https://x.com / a.com@8.8.8.8"></div>
       <button onclick="addProbe()">添加探针</button>
     </div>
     <div class="status" id="probe-status"></div>
@@ -99,9 +107,11 @@ async function loadNodes() {
       const st = (d.statuses && d.statuses[uuid]) || {};
       const cpu = st.cpu != null ? st.cpu.toFixed(1) + '%' : '—';
       const ram = st.ram != null ? (st.ram / 1073741824).toFixed(1) + ' GB' : '—';
+      const temp = st.temp ? st.temp.toFixed(1) + '°C' : '—';
       return `<tr><td>${n.name || '—'}</td><td><code>${uuid}</code></td><td>${n.region || '—'}</td>
-        <td>${st.online ? '<span class="tag on">在线</span>' : '<span class="tag">离线</span>'}</td><td><code>${cpu}</code></td><td><code>${ram}</code></td></tr>`;
-    }).join('') || '<tr><td colspan="6" class="muted">暂无节点</td></tr>';
+        <td>${st.online ? '<span class="tag on">在线</span>' : '<span class="tag">离线</span>'}</td><td><code>${cpu}</code></td><td><code>${ram}</code></td><td><code>${temp}</code></td>
+        <td><button class="danger" onclick="delNode('${uuid}')">删除</button></td></tr>`;
+    }).join('') || '<tr><td colspan="8" class="muted">暂无节点</td></tr>';
     document.getElementById('nodeCount').textContent = rows.length + ' 台';
     document.getElementById('stat').textContent = '运行中 · ' + rows.length + ' 节点';
   } catch (e) { document.getElementById('stat').textContent = '需要管理 Token'; }
@@ -110,10 +120,11 @@ async function loadProbes() {
   try {
     const d = await api('/api/admin/probes');
     document.querySelector('#probes tbody').innerHTML = (d.probes || []).map(p =>
-      `<tr><td><code>${p.client}</code></td><td>${p.name}</td><td><code>${p.target}</code></td>
+      `<tr><td><code>${p.client}</code></td><td><code>${p.type || 'icmp'}</code></td><td>${p.name}</td><td><code>${p.target}</code></td>
        <td>${p.enabled ? '<span class="tag on">启用</span>' : '<span class="tag">停用</span>'}</td>
-       <td><button class="danger" onclick="delProbe('${p.client}','${p.name}')">删除</button></td></tr>`).join('')
-      || '<tr><td colspan="5" class="muted">暂无探针</td></tr>';
+       <td><button class="ghost" onclick="toggleProbe('${p.client}','${p.name}','${p.target}','${p.type || 'icmp'}',${p.enabled})">${p.enabled ? '停用' : '启用'}</button>
+           <button class="danger" onclick="delProbe('${p.client}','${p.name}')">删除</button></td></tr>`).join('')
+      || '<tr><td colspan="6" class="muted">暂无探针</td></tr>';
   } catch (e) {}
 }
 async function loadAlerts() {
@@ -138,8 +149,17 @@ async function addProbe() {
   const name = document.getElementById('p-name').value.trim();
   const target = document.getElementById('p-target').value.trim();
   if (!name || !target) return;
-  await api('/api/admin/probes', { method: 'POST', body: JSON.stringify({ client, name, target, enabled: true }) });
+  await api('/api/admin/probes', { method: 'POST', body: JSON.stringify({ client, name, target, type: document.getElementById('p-type').value, enabled: true }) });
   document.getElementById('probe-status').textContent = '✓ 已添加';
+  loadProbes();
+}
+async function delNode(uuid) {
+  if (!confirm('删除节点 ' + uuid + ' 及其历史？')) return;
+  await api('/api/admin/nodes', { method: 'DELETE', body: JSON.stringify({ uuid }) });
+  loadNodes();
+}
+async function toggleProbe(client, name, target, type, enabled) {
+  await api('/api/admin/probes', { method: 'POST', body: JSON.stringify({ client, name, target, type, enabled: !enabled }) });
   loadProbes();
 }
 async function delProbe(client, name) {

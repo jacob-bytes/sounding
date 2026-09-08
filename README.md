@@ -37,7 +37,7 @@
 | 能力 | 说明 |
 |---|---|
 | 节点采集 | CPU / 内存 / Swap / 磁盘 / 网络 / 负载（1/5/15）/ 温度 / 系统信息 |
-| 探针 | **ICMP**（非特权优先→TCP 回退）/ per-node 目标 / 全局任务 |
+| 探针 | **ICMP / TCP / HTTP / DNS** 四类型 · per-node 目标 · 全局任务 |
 | 实时 | **WebSocket JSON-RPC**（ink 秒级刷新）+ HTTP 轮询 |
 | 告警 | 离线 / 延迟 / 丢包 → **Telegram + Webhook**（运行时 CRUD，5min 去重） |
 | 认证 | JWT 登录（HS256）+ Admin Token |
@@ -233,7 +233,7 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 | **历史保留** | `-retain-days 30`（6 小时清理 + VACUUM） |
 | **健康检查** | `GET /healthz`（LB/K8s 探针） |
 | **实时通道** | `/public` 返回 `theme_settings.rpcTransportMode=websocket` → ink 自动走 WS（秒级推送） |
-| **一键安装** | `curl -fsSL .../scripts/install.sh \| sh -s -- server` |
+| **一键安装** | `curl -fsSL .../scripts/install.sh \| sh -s -- server`（自动识别 OS/架构 + 拉最新 Release） |
 | **内置管理页** | `http://<主控>:8080/admin/`（Go embed 单文件——节点/探针/告警规则可视化配置） |
 | **Agent 远程配置** | 主控改探针 → Agent 30s 内自动拉取（`-remote-config`，默认开） |
 
@@ -251,9 +251,12 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 | 渠道 | 参数 |
 |---|---|
 | **Telegram** | `-telegram-token` + `-telegram-chat-id` |
+| **钉钉** | `-dingtalk-webhook <url>`（可选 `-dingtalk-secret` 加签） |
+| **飞书** | `-feishu-webhook <url>` |
+| **邮件** | `-smtp-host -smtp-user -smtp-pass -smtp-from -smtp-to` |
 | Webhook | `-alert-webhook <url>`（JSON POST） |
 
-后续可加钉钉/飞书/邮件（同一接口，注册即用）。
+新增渠道：实现 `internal/notify.Notifier`（`Name()` + `Send()`）→ 在 main 注册即可。
 
 ## 致谢
 

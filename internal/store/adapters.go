@@ -326,3 +326,12 @@ func (s *Store) AdminProbeTaskNames(client string) ([]string, error) {
 	}
 	return out, rows.Err()
 }
+
+// AdminDeleteNode 删除节点及其历史。
+func (s *Store) AdminDeleteNode(uuid string) error {
+	if _, err := s.db.Exec(`DELETE FROM status_history WHERE client=?`, uuid); err != nil {
+		return err
+	}
+	_, err := s.db.Exec(`DELETE FROM nodes WHERE uuid=?`, uuid)
+	return err
+}
