@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -195,8 +196,17 @@ func main() {
 		}
 	}
 	if *staticDir != "" {
-		mux.Handle("/", http.FileServer(http.Dir(*staticDir)))
-		log.Printf("serving ink dashboard from %s", *staticDir)
+		fs := http.FileServer(http.Dir(*staticDir))
+		mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// SPA fallback：非静态资源路径（如 /node/xxx）回退 index.html
+			path := filepath.Join(*staticDir, filepath.Clean(r.URL.Path))
+			if _, err := os.Stat(path); err != nil && r.URL.Path != "/" {
+				http.ServeFile(w, r, filepath.Join(*staticDir, "index.html"))
+				return
+			}
+			fs.ServeHTTP(w, r)
+		}))
+		log.Printf("serving dashboard from %s", *staticDir)
 	}
 
 	log.Printf("sounding server listening on %s (rpc2: /rpc2)", *addr)

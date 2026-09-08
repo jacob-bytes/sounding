@@ -30,6 +30,10 @@
 
 ![sounding dashboard](docs/dashboard.png)
 
+**节点详情**（`/node/:uuid`——趋势图 + 资源指标 + 探针延迟）
+
+![sounding detail](docs/detail.png)
+
 **内置管理页**（`/admin/`——节点 / 探针 / 告警规则，**亮/暗自选，默认亮色**）
 
 | 亮色（默认） | 暗色 |

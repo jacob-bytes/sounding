@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { Client, NodeStatus } from '@/services/rpc'
 import { formatBytes, formatSpeed, formatUptime, latencyClass, percent, statusOf } from '@/utils/format'
 
 const props = defineProps<{ node: Client, status?: NodeStatus }>()
+const router = useRouter()
 
 const st = computed(() => props.status)
 const cpuPct = computed(() => st.value?.cpu ?? 0)
@@ -14,7 +16,12 @@ const pingList = computed(() => Object.values(st.value?.ping ?? {}))
 </script>
 
 <template>
-  <div class="rounded-lg border border-border bg-card transition-colors hover:border-primary/30">
+  <div
+    class="cursor-pointer rounded-lg border border-border bg-card transition-colors hover:border-primary/30"
+    role="button" tabindex="0"
+    @click="router.push(`/node/${node.uuid}`)"
+    @keydown.enter="router.push(`/node/${node.uuid}`)"
+  >
     <div class="flex items-center gap-2 border-b border-border px-3 py-2.5">
       <span class="size-1.5 shrink-0 rounded-full" :class="st?.online ? 'bg-success' : 'bg-destructive'" />
       <span class="truncate text-sm font-medium text-foreground">{{ node.name }}</span>
