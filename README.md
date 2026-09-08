@@ -14,6 +14,16 @@
 
 ---
 
+## 在线演示
+
+> 部署自己的演示站（任选其一，均**免费无需信用卡**）：
+> ```bash
+> ./scripts/deploy-demo.sh vps     # 自有 VPS + Cloudflare Tunnel（推荐）
+> ./scripts/deploy-demo.sh hf      # Hugging Face Spaces（无休眠）
+> ./scripts/deploy-demo.sh koyeb   # Koyeb 免费实例
+> ./scripts/deploy-demo.sh local   # 本地 + 临时公网
+> ```
+
 ## 截图
 
 **内置管理页**（`/admin/`——节点 / 探针 / 告警规则，**亮/暗自选，默认亮色**）
