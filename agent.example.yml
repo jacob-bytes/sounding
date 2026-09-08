@@ -1,0 +1,8 @@
+# sounding-agent 配置示例（复制为 agent.yml，SIGHUP/编辑即热重载）
+server: http://localhost:8080
+token: sounding-demo-token
+node_uuid: n1
+interval: 15s
+probes:
+  - "上海移动:223.5.5.5"
+  - "腾讯 DNS:119.29.29.29"

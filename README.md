@@ -122,6 +122,31 @@ curl -X POST http://主控:8080/api/admin/nodes -H 'X-Admin-Token: <admin-token>
 > 认证：管理 API 用 `-admin-token`；Agent 上报用 `-agent-token`。
 
 
+
+## 配置方式（CLI / 环境变量 / 配置文件）
+
+纯 CLI 不够灵活？支持**配置文件 + 热重载**（改配置无需重启）：
+
+```yaml
+# agent.yml（-config 指定；SIGHUP 或编辑保存即热重载）
+server: http://localhost:8080
+token: sounding-demo-token
+node_uuid: n1
+interval: 15s
+probes:
+  - "上海移动:223.5.5.5"
+  - "腾讯 DNS:119.29.29.29"
+```
+
+```bash
+./sounding-agent -config ./agent.yml          # 文件配置（推荐）
+kill -HUP <pid>                                # 手动热重载
+# 或直接编辑保存 agent.yml（30s 内自动感知）
+```
+
+**优先级**：`CLI flag > 环境变量 > 配置文件 > 默认值`（server/token/probes 每次上报都读最新值——**修改即刻生效**）。
+
+
 ## 部署模型（开源使用说明）
 
 **每个使用者自托管自己的主控**——Agent 只需指向自己的主控地址：

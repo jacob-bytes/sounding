@@ -25,6 +25,7 @@ func main() {
 		envProbe  = "SOUNDING_PROBES"
 		envInterval = "SOUNDING_INTERVAL"
 	)
+	configFile := flag.String("config", "", "配置文件路径（agent.yml——支持 SIGHUP/修改热重载）")
 	server := flag.String("server", envOr(envServer, "http://localhost:8080"), "主控地址（可用 $SOUNDING_SERVER）")
 	token := flag.String("token", envOr(envToken, "sounding-demo-token"), "上报认证 token（可用 $SOUNDING_TOKEN）")
 	interval := flag.Duration("interval", envOrDuration(envInterval, 15*time.Second), "采集周期（可用 $SOUNDING_INTERVAL）")
@@ -32,31 +33,37 @@ func main() {
 	nodeUUID := flag.String("node-uuid", envOr(envUUID, ""), "节点 UUID（默认主机名；可用 $SOUNDING_NODE_UUID）")
 	flag.Parse()
 
+	// 热重载配置（flag/env 为初值；文件配置动态覆盖）
+	fc := LoadConfig(*configFile)
+	finalServer := fc.Server(*server)
+	finalToken := fc.Token(*token)
+	intervalVal := fc.Interval(*interval)
+	uuid := fc.NodeUUID(*nodeUUID)
+
 	osInfo, err := collect.GetOSInfo()
 	if err != nil {
 		log.Printf("osinfo: %v", err)
 	}
-	uuid := *nodeUUID
 	if uuid == "" {
 		uuid = osInfo.HostName
 	}
-	c := collect.New(*interval)
+	c := collect.New(intervalVal)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	log.Printf("sounding-agent %s → %s (every %s)", uuid, *server, *interval)
-	ticker := time.NewTicker(*interval)
+	log.Printf("sounding-agent %s → %s (every %s, config=%s)", uuid, finalServer, intervalVal, *configFile)
+	ticker := time.NewTicker(intervalVal)
 	defer ticker.Stop()
 
-	// 首帧立即上报（注册节点）
-	report(ctx, *server, *token, uuid, osInfo, c, parseProbes(*probeTargets))
+	// 首帧立即上报（注册节点）——server/token/probes 每次从热重载配置取
+	report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(fc.Probes()+","+*probeTargets))
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			report(ctx, *server, *token, uuid, osInfo, c, parseProbes(*probeTargets))
+			report(ctx, fc.Server(finalServer), fc.Token(finalToken), uuid, osInfo, c, parseProbes(fc.Probes()+","+*probeTargets))
 		}
 	}
 }
