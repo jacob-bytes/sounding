@@ -3,3 +3,5 @@ sounding-server
 sounding-agent
 agent
 *.db
+test-results/
+playwright-report/
