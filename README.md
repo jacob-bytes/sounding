@@ -16,9 +16,11 @@
 
 ## 截图
 
-**内置管理页**（`/admin/`——节点 / 探针 / 告警规则）
+**内置管理页**（`/admin/`——节点 / 探针 / 告警规则，**亮/暗自选，默认亮色**）
 
-![sounding admin](docs/admin.png)
+| 亮色（默认） | 暗色 |
+|---|---|
+| ![light](docs/admin-light.png) | ![dark](docs/admin-dark.png) |
 
 ## 架构
 

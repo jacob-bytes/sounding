@@ -5,9 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>sounding · 管理</title>
 <style>
-  :root { --bg:#0f172a; --card:#1e293b; --border:#334155; --fg:#f1f5f9; --muted:#94a3b8; --primary:#3b82f6; --danger:#ef4444; }
+  :root {
+    --bg:#f8fafc; --card:#ffffff; --border:#e2e8f0; --fg:#0f172a; --muted:#64748b;
+    --primary:#2563eb; --danger:#dc2626; --input-bg:#ffffff; --hover:#f1f5f9; --row-border:rgba(226,232,240,.8);
+  }
+  [data-theme="dark"] {
+    --bg:#0f172a; --card:#1e293b; --border:#334155; --fg:#f1f5f9; --muted:#94a3b8;
+    --primary:#3b82f6; --danger:#ef4444; --input-bg:#0b1220; --hover:#26334a; --row-border:rgba(51,65,85,.5);
+  }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.6 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; transition: background .2s, color .2s; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 20px 80px; }
   h1 { font-size: 20px; margin: 0 0 4px; font-weight: 600; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
@@ -16,13 +23,14 @@
   .card h2 span { color: var(--muted); font-weight: 400; font-size: 12px; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; color: var(--muted); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 12px; }
-  td { padding: 7px 8px; border-bottom: 1px solid rgba(51,65,85,.5); }
+  td { padding: 7px 8px; border-bottom: 1px solid var(--row-border); }
   tr:last-child td { border-bottom: none; }
   code { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); }
-  input, select { background:#0b1220; border:1px solid var(--border); color:var(--fg); border-radius:6px; padding:7px 9px; font-size:13px; width:100%; }
+  input, select { background:var(--input-bg); border:1px solid var(--border); color:var(--fg); border-radius:6px; padding:7px 9px; font-size:13px; width:100%; }
   input:focus, select:focus { outline:none; border-color: var(--primary); }
   button { background: var(--primary); color:#fff; border:none; border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer; font-weight:500; }
-  button:hover { filter: brightness(1.1); }
+  button:hover { filter: brightness(1.08); }
+  button.ghost:hover { background: var(--hover); }
   button.ghost { background: transparent; border:1px solid var(--border); color: var(--muted); }
   button.danger { background: transparent; border:1px solid var(--danger); color: var(--danger); padding:4px 10px; font-size:12px; }
   .row { display:grid; grid-template-columns: 1fr 1fr 1fr auto; gap:10px; align-items:end; }
@@ -36,8 +44,13 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>sounding 管理</h1>
-  <div class="sub">分布式探针主控 · <span id="stat">加载中…</span></div>
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:16px">
+    <div>
+      <h1>sounding 管理</h1>
+      <div class="sub">分布式探针主控 · <span id="stat">加载中…</span></div>
+    </div>
+    <button class="ghost" id="themeBtn" onclick="toggleTheme()" title="切换主题">🌙 暗色</button>
+  </div>
 
   <div class="card">
     <h2>节点 <span id="nodeCount"></span></h2>
@@ -91,6 +104,19 @@
 </div>
 <script>
 const TOKEN_KEY = 'sounding-admin-token';
+const THEME_KEY = 'sounding-admin-theme';
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'dark' ? 'dark' : 'light');
+  const btn = document.getElementById('themeBtn');
+  if (btn) btn.textContent = theme === 'dark' ? '☀️ 亮色' : '🌙 暗色';
+}
+function toggleTheme() {
+  const next = (localStorage.getItem(THEME_KEY) === 'dark') ? 'light' : 'dark';
+  localStorage.setItem(THEME_KEY, next);
+  applyTheme(next);
+}
+applyTheme(localStorage.getItem(THEME_KEY) || 'light'); // 默认亮色
 function token() { return localStorage.getItem(TOKEN_KEY) || ''; }
 function api(path, opts = {}) {
   opts.headers = Object.assign({ 'X-Admin-Token': token(), 'Content-Type': 'application/json' }, opts.headers || {});
