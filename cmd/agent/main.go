@@ -17,11 +17,19 @@ import (
 )
 
 func main() {
-	server := flag.String("server", "http://localhost:8080", "主控地址")
-	token := flag.String("token", "sounding-demo-token", "上报认证 token")
-	interval := flag.Duration("interval", 15*time.Second, "采集周期")
-	probeTargets := flag.String("probe", "", `本节点延迟测试目标（格式: "名称:主机,名称:主机"，如 "上海移动:223.5.5.5,腾讯 DNS:119.29.29.29"）`)
-	nodeUUID := flag.String("node-uuid", "", "节点 UUID（默认主机名）")
+	// 配置优先级：flag > env > 默认（开源友好——Docker/K8s 可用环境变量）
+	const (
+		envServer = "SOUNDING_SERVER"
+		envToken  = "SOUNDING_TOKEN"
+		envUUID   = "SOUNDING_NODE_UUID"
+		envProbe  = "SOUNDING_PROBES"
+		envInterval = "SOUNDING_INTERVAL"
+	)
+	server := flag.String("server", envOr(envServer, "http://localhost:8080"), "主控地址（可用 $SOUNDING_SERVER）")
+	token := flag.String("token", envOr(envToken, "sounding-demo-token"), "上报认证 token（可用 $SOUNDING_TOKEN）")
+	interval := flag.Duration("interval", envOrDuration(envInterval, 15*time.Second), "采集周期（可用 $SOUNDING_INTERVAL）")
+	probeTargets := flag.String("probe", envOr(envProbe, ""), `本节点延迟测试目标（格式: "名称:主机,名称:主机"，如 "上海移动:223.5.5.5,腾讯 DNS:119.29.29.29"，可用 $SOUNDING_PROBES）`)
+	nodeUUID := flag.String("node-uuid", envOr(envUUID, ""), "节点 UUID（默认主机名；可用 $SOUNDING_NODE_UUID）")
 	flag.Parse()
 
 	osInfo, err := collect.GetOSInfo()
@@ -57,6 +65,24 @@ func main() {
 type probeTarget struct {
 	Name string `json:"name"`
 	Host string `json:"host"`
+}
+
+// envOr 读取环境变量或返回默认值。
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// envOrDuration 读取环境变量持续时间或返回默认值。
+func envOrDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
 }
 
 func parseProbes(s string) []probeTarget {

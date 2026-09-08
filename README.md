@@ -121,6 +121,34 @@ curl -X POST http://主控:8080/api/admin/nodes -H 'X-Admin-Token: <admin-token>
 
 > 认证：管理 API 用 `-admin-token`；Agent 上报用 `-agent-token`。
 
+
+## 部署模型（开源使用说明）
+
+**每个使用者自托管自己的主控**——Agent 只需指向自己的主控地址：
+
+```bash
+# 使用者 A（推荐容器/环境变量方式）
+SOUNDING_SERVER=https://a.example.com \
+SOUNDING_TOKEN=<a-token> \
+SOUNDING_PROBES="上海移动:223.5.5.5,腾讯 DNS:119.29.29.29" \
+  ./sounding-agent -node-uuid a-n1
+
+# 使用者 B（CLI 方式指自己的主控）
+./sounding-agent -server http://b.example.com:8080 -token <b-token> -node-uuid b-n1
+```
+
+**配置优先级**：`CLI flag > 环境变量 > 默认值`
+
+| 环境变量 | 对应 flag | 说明 |
+|---|---|---|
+| `SOUNDING_SERVER` | `-server` | 主控地址（**必配——指到自己的主控**） |
+| `SOUNDING_TOKEN` | `-token` | 上报 token |
+| `SOUNDING_NODE_UUID` | `-node-uuid` | 节点 ID（默认主机名） |
+| `SOUNDING_PROBES` | `-probe` | 本节点延迟目标 |
+| `SOUNDING_INTERVAL` | `-interval` | 采集周期 |
+
+> 主控侧：`-agent-token` 与 `-admin-token` 由部署者自行设定——**不同部署者互不干扰**（各自的 server 管各自的 agents）。
+
 ## 致谢
 
 - 前端契约金标准：[komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)
