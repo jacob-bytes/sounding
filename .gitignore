@@ -1,4 +1,5 @@
 .gomodcache/
 sounding-server
 sounding-agent
+agent
 *.db
