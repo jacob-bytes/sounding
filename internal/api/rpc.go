@@ -94,16 +94,23 @@ func NewHandler(s interface {
 	return &Handler{store: s}
 }
 
-// ServeHTTP 实现 JSON-RPC 2.0 POST。
+// ServeHTTP 实现 JSON-RPC 2.0 POST（WS 升级则转 ServeWS）。
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if IsWebSocketRequest(r) {
+		h.ServeWS(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	var req RPCRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeErr(w, nil, -32700, "parse error")
 		return
 	}
-	var result any
-	var err error
+	_ = json.NewEncoder(w).Encode(h.dispatch(req))
+}
+
+// dispatch 执行方法调用并返回响应（HTTP/WS 共用）。
+func (h *Handler) dispatch(req RPCRequest) RPCResponse {
 	// ink 的 RPC 容器可能带命名空间前缀（如 common:getNodes / rpc.ping）——规范化
 	method := req.Method
 	if i := strings.LastIndex(method, ":"); i >= 0 {
@@ -111,6 +118,8 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else if i := strings.LastIndex(method, "."); i >= 0 {
 		method = method[i+1:]
 	}
+	var result any
+	var err error
 	switch method {
 	case "ping":
 		result = "pong"
@@ -119,7 +128,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case "getVersion":
 		result = map[string]string{"version": "0.1.0"}
 	case "getClient":
-		// 访客客户端信息（ink init 调用——宽松返回）
 		result = map[string]any{"ip": "", "country": "CN", "country_code": "CN", "asn": "", "isp": ""}
 	case "getHelp":
 		result = "<html><body><h1>sounding</h1></body></html>"
@@ -158,14 +166,12 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		result, err = h.store.RecentStatus(p.Client, p.Limit)
 	default:
-		writeErr(w, req.ID, -32601, "method not found: "+req.Method)
-		return
+		return RPCResponse{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32601, Message: "method not found: " + req.Method}}
 	}
 	if err != nil {
-		writeErr(w, req.ID, -32000, err.Error())
-		return
+		return RPCResponse{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32000, Message: err.Error()}}
 	}
-	_ = json.NewEncoder(w).Encode(RPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result})
+	return RPCResponse{JSONRPC: "2.0", ID: req.ID, Result: result}
 }
 
 func writeErr(w http.ResponseWriter, id json.RawMessage, code int, msg string) {
