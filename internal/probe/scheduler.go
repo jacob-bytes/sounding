@@ -11,7 +11,7 @@ import (
 // Recorder 探测结果存储接口（store 实现）。
 type Recorder interface {
 	InsertProbe(client string, taskID int, timeStr string, value float64) error
-	ProbeTasks() ([]Task, error)
+	ProbeTasks(client string) ([]Task, error)
 }
 
 // Scheduler 探针调度器（goroutine 池 + 定时重跑）。
@@ -33,7 +33,7 @@ func (s *Scheduler) Start(ctx context.Context) {
 
 func (s *Scheduler) loop(ctx context.Context) {
 	for {
-		tasks, err := s.store.ProbeTasks()
+		tasks, err := s.store.ProbeTasks(s.client)
 		if err != nil {
 			log.Printf("probe: load tasks: %v", err)
 		}

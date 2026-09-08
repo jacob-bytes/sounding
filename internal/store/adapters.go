@@ -85,9 +85,9 @@ func (s *Store) UpsertNode(uuid, name, _ string) error {
 	return err
 }
 
-// ProbeTasks 返回启用的探针任务。
-func (s *Store) ProbeTasks() ([]probe.Task, error) {
-	rows, err := s.db.Query(`SELECT id, target, type, name, interval_sec, enabled FROM probe_tasks ORDER BY id`)
+// ProbeTasks 返回启用的探针任务（含全局 + 指定 client）。
+func (s *Store) ProbeTasks(client string) ([]probe.Task, error) {
+	rows, err := s.db.Query(`SELECT id, client, target, type, name, interval_sec, enabled FROM probe_tasks WHERE client='*' OR client=? ORDER BY id`, client)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,8 @@ func (s *Store) ProbeTasks() ([]probe.Task, error) {
 		var t probe.Task
 		var intervalSec float64
 		var enabled int
-		if err := rows.Scan(&t.ID, &t.Target, &t.Type, &t.Name, &intervalSec, &enabled); err != nil {
+		var cli string
+		if err := rows.Scan(&t.ID, &cli, &t.Target, &t.Type, &t.Name, &intervalSec, &enabled); err != nil {
 			return nil, err
 		}
 		t.Interval = time.Duration(intervalSec * float64(time.Second))
@@ -105,6 +106,18 @@ func (s *Store) ProbeTasks() ([]probe.Task, error) {
 		out = append(out, t)
 	}
 	return out, rows.Err()
+}
+
+// UpsertProbeTask 按 (client, name) 创建/更新探针任务。
+func (s *Store) UpsertProbeTask(client, target, name, typ string, intervalSec float64, enabled bool) error {
+	e := 0
+	if enabled {
+		e = 1
+	}
+	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, type, name, interval_sec, enabled) VALUES (?,?,?,?,?,?)
+		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, interval_sec=excluded.interval_sec, enabled=excluded.enabled`,
+		client, target, typ, name, intervalSec, e)
+	return err
 }
 
 // InsertProbe 写入探针记录。
@@ -131,4 +144,48 @@ func (s *Store) PingRecords(client string, taskID int, limit int) ([]api.PingRec
 		out = append(out, r)
 	}
 	return out, rows.Err()
+}
+
+// AdminNodes 管理视角节点列表。
+func (s *Store) AdminNodes() ([]api.NodeRecord, error) { return s.Nodes() }
+
+// AdminUpsertNode 手动添加/更新节点。
+func (s *Store) AdminUpsertNode(n api.NodeRecord) error {
+	_, err := s.db.Exec(`INSERT INTO nodes (uuid, name, cpu_name, arch, os, region, cpu_cores, mem_total, disk_total, price, billing_cycle, currency, expired_at, group_name, tags, public_remark)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+		ON CONFLICT(uuid) DO UPDATE SET name=excluded.name, region=excluded.region, price=excluded.price`,
+		n.UUID, n.Name, n.CPUName, n.Arch, n.OS, n.Region, n.CPUCores, n.MemTotal, n.DiskTotal, n.Price, n.BillingCycle, n.Currency, n.ExpiredAt, n.Group, n.Tags, n.PublicRemark)
+	return err
+}
+
+// AdminProbeTasks 管理视角探针任务。
+func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
+	rows, err := s.db.Query(`SELECT id, client, target, name, enabled FROM probe_tasks ORDER BY client, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []api.AdminProbe
+	for rows.Next() {
+		var p api.AdminProbe
+		var enabled int
+		if err := rows.Scan(&p.ID, &p.Client, &p.Target, &p.Name, &enabled); err != nil {
+			return nil, err
+		}
+		p.Enabled = enabled == 1
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// AdminUpsertProbe 管理视角创建/更新探针。
+func (s *Store) AdminUpsertProbe(client, target, name string, enabled bool) error {
+	e := 0
+	if enabled {
+		e = 1
+	}
+	_, err := s.db.Exec(`INSERT INTO probe_tasks (client, target, name, type, interval_sec, enabled) VALUES (?,?,?,'ping',60,?)
+		ON CONFLICT(client, name) DO UPDATE SET target=excluded.target, enabled=excluded.enabled`,
+		client, target, name, e)
+	return err
 }

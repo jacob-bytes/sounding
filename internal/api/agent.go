@@ -12,6 +12,13 @@ type AgentPayload struct {
 	Time    string  `json:"time"`
 	OSInfo  json.RawMessage `json:"os_info"`
 	Status  AgentStatus `json:"status"`
+	Probes  []ProbeTarget `json:"probes"`
+}
+
+// ProbeTarget Agent 上报的探针目标。
+type ProbeTarget struct {
+	Name string `json:"name"`
+	Host string `json:"host"`
 }
 
 // AgentStatus 上报状态（字段与 collect.Snapshot 对齐）。
@@ -38,6 +45,7 @@ type AgentEndpoint struct {
 	store interface {
 		UpsertNode(uuid, name string, info string) error
 		InsertStatus(uuid string, st AgentStatusForStore) error
+		UpsertProbeTask(client, target, name, typ string, intervalSec float64, enabled bool) error
 	}
 	token string
 }
@@ -49,6 +57,7 @@ type AgentStatusForStore = AgentStatus
 func NewAgentEndpoint(s interface {
 	UpsertNode(uuid, name string, info string) error
 	InsertStatus(uuid string, st AgentStatusForStore) error
+	UpsertProbeTask(client, target, name, typ string, intervalSec float64, enabled bool) error
 }, token string) *AgentEndpoint {
 	return &AgentEndpoint{store: s, token: token}
 }
@@ -76,6 +85,13 @@ func (h *AgentEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err := h.store.InsertStatus(payload.UUID, st); err != nil {
 		http.Error(w, "insert: "+err.Error(), http.StatusInternalServerError)
 		return
+	}
+	// per-node 探针目标（自动 upsert）
+	for _, pt := range payload.Probes {
+		if pt.Name == "" || pt.Host == "" {
+			continue
+		}
+		_ = h.store.UpsertProbeTask(payload.UUID, pt.Host, pt.Name, "ping", 60, true)
 	}
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})

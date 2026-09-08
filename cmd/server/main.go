@@ -17,6 +17,7 @@ func main() {
 	seed := flag.Bool("seed", true, "启动时写入演示数据")
 	agentToken := flag.String("agent-token", "sounding-demo-token", "Agent 上报认证 token")
 	probeClient := flag.String("probe-client", "demo-001", "探针记录挂载的 client uuid")
+	adminToken := flag.String("admin-token", "", "管理 API token（为空=不启用认证）")
 	staticDir := flag.String("static", "", "前端静态目录（ink 构建产物——可选，提供管理后台）")
 	flag.Parse()
 
@@ -42,12 +43,16 @@ func main() {
 
 	h := api.NewHandler(st)
 	agentH := api.NewAgentEndpoint(st, *agentToken)
+	adminH := api.NewAdminEndpoint(st, *adminToken)
 	mux := http.NewServeMux()
 
 	// ink 契约：JSON-RPC 2.0 POST <base>/rpc2
 	mux.Handle("/rpc2", h)
 	// Agent 上报：POST /agent/status
 	mux.Handle("/agent/status", agentH)
+	// 管理 API：/api/admin/*
+	mux.Handle("/api/admin/nodes", adminH)
+	mux.Handle("/api/admin/probes", adminH)
 	// 管理后台（ink 前端构建产物）
 	if *staticDir != "" {
 		mux.Handle("/", http.FileServer(http.Dir(*staticDir)))

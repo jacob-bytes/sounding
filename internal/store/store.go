@@ -102,7 +102,7 @@ func (s *Store) SeedProbeTasks() error {
 		{"119.29.29.29", "腾讯 DNS"},
 		{"1.1.1.1", "Cloudflare DNS"},
 	} {
-		if _, err := s.db.Exec(`INSERT OR IGNORE INTO probe_tasks (target, name, interval_sec, enabled) VALUES (?,?,60,1)`, t.target, t.name); err != nil {
+		if _, err := s.db.Exec(`INSERT OR IGNORE INTO probe_tasks (client, target, name, interval_sec, enabled) VALUES ('*',?,?,60,1)`, t.target, t.name); err != nil {
 			return err
 		}
 	}
@@ -119,6 +119,7 @@ func (s *Store) ensureProbeTables() error {
 	_, err := s.db.Exec(`
 CREATE TABLE IF NOT EXISTS probe_tasks (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  client TEXT NOT NULL DEFAULT '*',
   target TEXT NOT NULL,
   type TEXT NOT NULL DEFAULT 'ping',
   name TEXT NOT NULL DEFAULT '',
@@ -132,6 +133,7 @@ CREATE TABLE IF NOT EXISTS probe_records (
   value REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_probe_client_task_time ON probe_records(client, task_id, time);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_probe_task_client_name ON probe_tasks(client, name);
 `)
 	return err
 }
