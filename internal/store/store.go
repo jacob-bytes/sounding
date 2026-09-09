@@ -27,7 +27,53 @@ func Open(path string) (*Store, error) {
 	if err := s.ensureProbeTables(); err != nil {
 		return nil, err
 	}
+	if err := s.ensureColumns(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// ensureColumns 为旧库补齐后加的列（SQLite 无 ADD COLUMN IF NOT EXISTS）。
+func (s *Store) ensureColumns() error {
+	cols := []struct{ table, column, ddl string }{
+		{"nodes", "swap_total", "REAL NOT NULL DEFAULT 0"},
+		{"nodes", "kernel_version", "TEXT NOT NULL DEFAULT ''"},
+		{"nodes", "virtualization", "TEXT NOT NULL DEFAULT ''"},
+		{"status_history", "uptime", "REAL NOT NULL DEFAULT 0"},
+	}
+	for _, c := range cols {
+		has, err := s.hasColumn(c.table, c.column)
+		if err != nil {
+			return err
+		}
+		if has {
+			continue
+		}
+		if _, err := s.db.Exec("ALTER TABLE " + c.table + " ADD COLUMN " + c.column + " " + c.ddl); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) hasColumn(table, column string) (bool, error) {
+	rows, err := s.db.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var dflt any
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func (s *Store) migrate() error {
@@ -41,7 +87,10 @@ CREATE TABLE IF NOT EXISTS nodes (
   region TEXT NOT NULL DEFAULT '',
   cpu_cores REAL NOT NULL DEFAULT 1,
   mem_total REAL NOT NULL DEFAULT 0,
+  swap_total REAL NOT NULL DEFAULT 0,
   disk_total REAL NOT NULL DEFAULT 0,
+  kernel_version TEXT NOT NULL DEFAULT '',
+  virtualization TEXT NOT NULL DEFAULT '',
   price REAL NOT NULL DEFAULT 0,
   billing_cycle REAL NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'USD',
@@ -70,7 +119,8 @@ CREATE TABLE IF NOT EXISTS status_history (
   load15 REAL NOT NULL DEFAULT 0,
   ram_total REAL NOT NULL DEFAULT 0,
   swap_total REAL NOT NULL DEFAULT 0,
-  disk_total REAL NOT NULL DEFAULT 0
+  disk_total REAL NOT NULL DEFAULT 0,
+  uptime REAL NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_status_client_time ON status_history(client, time);
 `)
@@ -139,6 +189,18 @@ CREATE TABLE IF NOT EXISTS probe_records (
 );
 CREATE INDEX IF NOT EXISTS idx_probe_client_task_time ON probe_records(client, task_id, time);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_probe_task_client_name ON probe_tasks(client, name);
+CREATE TABLE IF NOT EXISTS alert_rules (
+  kind TEXT NOT NULL,
+  node TEXT NOT NULL,
+  threshold REAL NOT NULL DEFAULT 0,
+  silence_until TEXT NOT NULL DEFAULT '',
+  mute_windows TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY (kind, node)
+);
+CREATE TABLE IF NOT EXISTS secrets (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `)
 	return err
 }

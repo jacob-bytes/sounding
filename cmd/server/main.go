@@ -23,11 +23,11 @@ import (
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP 监听地址")
 	dbPath := flag.String("db", "sounding.db", "SQLite 数据库路径")
-	seed := flag.Bool("seed", true, "启动时写入演示数据")
+	seed := flag.Bool("seed", false, "启动时写入演示数据（演示/联调用）")
 	showVersion := flag.Bool("version", false, "显示版本并退出")
-	agentToken := flag.String("agent-token", "sounding-demo-token", "Agent 上报认证 token")
-	probeClient := flag.String("probe-client", "demo-001", "探针记录挂载的 client uuid")
-	adminToken := flag.String("admin-token", "", "管理 API token（为空=不启用认证）")
+	agentToken := flag.String("agent-token", os.Getenv("SOUNDING_AGENT_TOKEN"), "Agent 上报认证 token（为空则随机生成并打印；可用 $SOUNDING_AGENT_TOKEN）")
+	probeClient := flag.String("probe-client", "", "额外探针 client uuid（默认自动覆盖所有节点）")
+	adminToken := flag.String("admin-token", os.Getenv("SOUNDING_ADMIN_TOKEN"), "管理 API token（为空则随机生成并打印；可用 $SOUNDING_ADMIN_TOKEN）")
 	alertWebhook := flag.String("alert-webhook", "", "告警 Webhook 地址（为空=关闭该渠道）")
 	tgToken := flag.String("telegram-token", "", "Telegram Bot Token（与 chat-id 同时提供则启用）")
 	tgChat := flag.String("telegram-chat-id", "", "Telegram Chat ID")
@@ -42,9 +42,9 @@ func main() {
 	alertLatency := flag.Float64("alert-latency-ms", 0, "延迟告警阈值（ms，0=关闭）")
 	alertOffline := flag.Bool("alert-offline", true, "离线告警（默认开）")
 	retainDays := flag.Int("retain-days", 30, "历史数据保留天数（0=永久）")
-	adminUser := flag.String("admin-user", "admin", "管理后台用户名")
-	adminPass := flag.String("admin-pass", "", "管理后台密码（为空=不启用 JWT 登录）")
-	jwtSecret := flag.String("jwt-secret", "", "JWT 签名密钥（为空则自动生成）")
+	adminUser := flag.String("admin-user", envOr("SOUNDING_ADMIN_USER", "admin"), "管理后台用户名")
+	adminPass := flag.String("admin-pass", os.Getenv("SOUNDING_ADMIN_PASS"), "管理后台密码（为空=不启用 JWT 登录；可用 $SOUNDING_ADMIN_PASS）")
+	jwtSecret := flag.String("jwt-secret", os.Getenv("SOUNDING_JWT_SECRET"), "JWT 签名密钥（为空则自动生成；可用 $SOUNDING_JWT_SECRET）")
 	staticDir := flag.String("static", "", "前端静态目录（ink 构建产物——可选，提供管理后台）")
 	flag.Parse()
 
@@ -57,6 +57,26 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer st.Close()
+
+	// 未显式配置的 token/密钥：持久化到 SQLite，重启后保持不变
+	ensureSecret := func(flagVal *string, key, label string, logAlways bool) {
+		if *flagVal != "" {
+			return
+		}
+		v, created, err := st.GetOrCreateSecret(key)
+		if err != nil {
+			log.Fatalf("secret %s: %v", key, err)
+		}
+		*flagVal = v
+		if created {
+			log.Printf("已生成 %s: %s", label, v)
+		} else if logAlways {
+			log.Printf("使用已保存的 %s: %s", label, v)
+		}
+	}
+	ensureSecret(agentToken, "agent_token", "Agent Token", true)
+	ensureSecret(adminToken, "admin_token", "Admin Token", true)
+	ensureSecret(jwtSecret, "jwt_secret", "JWT Secret", *adminPass != "")
 	if *seed {
 		if err := st.Seed(); err != nil {
 			log.Printf("seed: %v", err)
@@ -81,8 +101,12 @@ func main() {
 		if *smtpHost != "" && *smtpFrom != "" && *smtpTo != "" {
 			notifiers = append(notifiers, notify.NewEmail(*smtpHost, *smtpUser, *smtpPass, *smtpFrom, strings.Split(*smtpTo, ",")))
 		}
-		if len(notifiers) > 0 {
-			rules := []alert.Rule{}
+		// 告警规则持久化：已存在的以库为准，空库用 CLI 参数播种
+		rules, err := st.LoadAlertRules()
+		if err != nil {
+			log.Printf("load alert rules: %v", err)
+		}
+		if len(rules) == 0 {
 			if *alertOffline {
 				rules = append(rules, alert.Rule{Kind: "offline", Node: "*", Threshold: 1})
 			}
@@ -90,9 +114,26 @@ func main() {
 				rules = append(rules, alert.Rule{Kind: "latency", Node: "*", Threshold: *alertLatency})
 			}
 			rules = append(rules, alert.Rule{Kind: "loss", Node: "*", Threshold: 100})
-			alertMgr = alert.NewManager(rules, notifiers, 5*time.Minute)
-			log.Printf("alerts enabled: %d 渠道", len(notifiers))
+			for _, r := range rules {
+				_ = st.SaveAlertRule(r)
+			}
+		} else if *alertLatency > 0 {
+			// CLI 显式指定延迟阈值时覆盖全局延迟规则
+			r := alert.Rule{Kind: "latency", Node: "*", Threshold: *alertLatency}
+			_ = st.SaveAlertRule(r)
+			replaced := false
+			for i := range rules {
+				if rules[i].Kind == "latency" && rules[i].Node == "*" {
+					rules[i] = r
+					replaced = true
+				}
+			}
+			if !replaced {
+				rules = append(rules, r)
+			}
 		}
+		alertMgr = alert.NewManager(rules, notifiers, 5*time.Minute)
+		log.Printf("alerts enabled: %d 渠道 · %d 规则", len(notifiers), len(rules))
 	}
 
 	// 演示探针种子
@@ -108,21 +149,26 @@ func main() {
 	}
 	if alertMgr != nil {
 		go alert.Watch(ctx, st, alertMgr, 30*time.Second)
-		log.Printf("alerts enabled → %s", *alertWebhook)
+		log.Printf("alert watcher started (every 30s)")
 	}
 
 	h := api.NewHandler(st)
 	agentH := api.NewAgentEndpoint(st, *agentToken)
 	adminH := api.NewAdminEndpoint(st, *adminToken)
 	adminH.SetStatusProvider(func() any { m, _ := st.LatestStatus(); return m })
+	adminH.SetJWTAuth(*jwtSecret)
 	if alertMgr != nil {
 		adminH.SetAlertHooksEx(
 			func() any { return alertMgr.Rules() },
 			func(kind, node string, threshold float64, _, silenceUntil string, muteWindows []string) error {
-				alertMgr.SetRule(alert.Rule{Kind: kind, Node: node, Threshold: threshold, SilenceUntil: silenceUntil, MuteWindows: muteWindows})
-				return nil
+				r := alert.Rule{Kind: kind, Node: node, Threshold: threshold, SilenceUntil: silenceUntil, MuteWindows: muteWindows}
+				alertMgr.SetRule(r)
+				return st.SaveAlertRule(r)
 			},
-			func(kind, node string) error { alertMgr.DeleteRule(kind, node); return nil },
+			func(kind, node string) error {
+				alertMgr.DeleteRule(kind, node)
+				return st.DeleteAlertRule(kind, node)
+			},
 		)
 	}
 	var loginH *api.LoginEndpoint
@@ -178,14 +224,14 @@ func main() {
 			case "/public":
 				publicSettingsHandler(w, nil)
 			case "/version":
-				writeJSON(w, map[string]any{"version": "0.1.0"})
+				writeJSON(w, map[string]any{"version": version.Version})
 			}
 		})
 	}
 	// /api/* 与根路径同实现（ink 默认 base=/api）
 	mux.HandleFunc("/api/me", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"logged_in": false}) })
 	mux.HandleFunc("/api/public", publicSettingsHandler)
-	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"version": "0.1.0"}) })
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"version": version.Version}) })
 	// 监控面板（ink 前端构建产物）——-static 指定，或自动探测 ./admin、/var/lib/sounding/admin
 	if *staticDir == "" {
 		for _, cand := range []string{"./admin", "/var/lib/sounding/admin"} {
@@ -242,4 +288,12 @@ func publicSettingsHandler(w http.ResponseWriter, _ *http.Request) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// envOr 读取环境变量或返回默认值（flag 默认值用，flag 显式传参会覆盖）。
+func envOr(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }

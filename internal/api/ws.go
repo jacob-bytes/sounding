@@ -5,12 +5,25 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/gorilla/websocket"
 )
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(_ *http.Request) bool { return true }, // 同源自托管场景
+}
+
+// wsWriter 串行化同一连接上的写操作（gorilla/websocket 不允许并发写）。
+type wsWriter struct {
+	mu   sync.Mutex
+	conn *websocket.Conn
+}
+
+func (w *wsWriter) WriteJSON(v any) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.conn.WriteJSON(v)
 }
 
 // ServeWS 处理 WebSocket JSON-RPC（ink 的实时通道）。
@@ -22,7 +35,8 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 	log.Printf("ws client connected: %s", r.RemoteAddr)
-	stop := h.startPush(conn)
+	writer := &wsWriter{conn: conn}
+	stop := h.startPush(writer)
 	defer close(stop)
 
 	for {
@@ -35,7 +49,7 @@ func (h *Handler) ServeWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		resp := h.dispatch(req)
-		if err := conn.WriteJSON(resp); err != nil {
+		if err := writer.WriteJSON(resp); err != nil {
 			return
 		}
 	}

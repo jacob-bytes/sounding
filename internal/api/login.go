@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -17,12 +19,22 @@ type LoginEndpoint struct {
 	TTL      time.Duration
 }
 
-// NewLoginEndpoint 构建登录端点。
+// NewLoginEndpoint 构建登录端点。secret 为空时随机生成（不再使用固定默认值）。
 func NewLoginEndpoint(user, pass, secret string) *LoginEndpoint {
 	if secret == "" {
-		secret = "sounding-dev-secret"
+		secret = RandomSecret()
 	}
 	return &LoginEndpoint{Username: user, Password: pass, Secret: secret, TTL: 24 * time.Hour}
+}
+
+// RandomSecret 生成 32 字节随机密钥（hex 编码）。
+func RandomSecret() string {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand 失败时退化为时间派生值，保证进程仍可启动
+		return "sounding-" + time.Now().Format("20060102150405.000000000")
+	}
+	return hex.EncodeToString(b)
 }
 
 // ServeHTTP POST /api/login  {username,password} → {token}。

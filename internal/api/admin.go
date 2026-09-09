@@ -3,6 +3,9 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
+
+	"github.com/jacob-bytes/sounding/internal/auth"
 )
 
 // AdminEndpoint 管理 API（添加服务器 / 探针配置 / 告警规则——带 admin token）。
@@ -16,12 +19,13 @@ type AdminEndpoint struct {
 		AdminDeleteNode(uuid string) error
 		AdminProbeTaskNames(client string) ([]string, error)
 	}
-	statuses func() any
-	token    string
-	alerts   func() any
+	statuses   func() any
+	token      string
+	jwtSecret  string
+	alerts     func() any
 	setAlert   func(kind, node string, threshold float64, webhook string) error
 	setAlertEx func(kind, node string, threshold float64, webhook, silenceUntil string, muteWindows []string) error
-	delAlert func(kind, node string) error
+	delAlert   func(kind, node string) error
 }
 
 // statusProvider 由 main 注入（返回 map[uuid]NodeStatus）。
@@ -58,6 +62,9 @@ func NewAdminEndpoint(s interface {
 // SetStatusProvider 注入节点状态读取。
 func (h *AdminEndpoint) SetStatusProvider(f func() any) { h.statuses = f }
 
+// SetJWTAuth 启用 JWT Bearer 鉴权（与 X-Admin-Token 二选一）。
+func (h *AdminEndpoint) SetJWTAuth(secret string) { h.jwtSecret = secret }
+
 // SetAlertHooks 注入告警规则读写（避免包循环）。
 func (h *AdminEndpoint) SetAlertHooks(list func() any, set func(kind, node string, threshold float64, webhook string) error, del func(kind, node string) error) {
 	h.alerts, h.setAlert, h.delAlert = list, set, del
@@ -69,7 +76,19 @@ func (h *AdminEndpoint) SetAlertHooksEx(list func() any, set func(kind, node str
 }
 
 func (h *AdminEndpoint) auth(r *http.Request) bool {
-	return h.token == "" || r.Header.Get("X-Admin-Token") == h.token
+	if h.token != "" && r.Header.Get("X-Admin-Token") == h.token {
+		return true
+	}
+	if h.jwtSecret != "" {
+		tok := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if tok != "" {
+			if _, err := auth.Verify(h.jwtSecret, tok); err == nil {
+				return true
+			}
+		}
+	}
+	// token 与 JWT 均未配置时视为不启用认证（仅建议本地开发使用）
+	return h.token == "" && h.jwtSecret == ""
 }
 
 // ServeHTTP /api/admin/*。
@@ -138,6 +157,10 @@ func (h *AdminEndpoint) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
 				http.Error(w, "bad payload", http.StatusBadRequest)
+				return
+			}
+			if h.setAlertEx == nil {
+				http.Error(w, "alerts not enabled", http.StatusNotImplemented)
 				return
 			}
 			if err := h.setAlertEx(p.Kind, p.Node, p.Threshold, p.Webhook, p.SilenceUntil, p.MuteWindows); err != nil {

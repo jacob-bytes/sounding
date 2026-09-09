@@ -12,11 +12,11 @@ import (
 
 // Rule 告警规则。
 type Rule struct {
-	Kind         string   `json:"kind"`           // offline | latency | loss
-	Node         string   `json:"node"`           // uuid 或 *（全部）
-	Threshold    float64  `json:"threshold"`      // 阈值（ms / %）
-	SilenceUntil string   `json:"silence_until"`  // 静默截止（RFC3339，空=不静默）
-	MuteWindows  []string `json:"mute_windows"`   // 每日静默时段 "02:00-04:00"
+	Kind         string   `json:"kind"`          // offline | latency | loss
+	Node         string   `json:"node"`          // uuid 或 *（全部）
+	Threshold    float64  `json:"threshold"`     // 阈值（ms / %）
+	SilenceUntil string   `json:"silence_until"` // 静默截止（RFC3339，空=不静默）
+	MuteWindows  []string `json:"mute_windows"`  // 每日静默时段 "02:00-04:00"
 }
 
 // silenced 判断规则当前是否处于静默（维护窗口）。

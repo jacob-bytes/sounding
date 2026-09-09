@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 )
@@ -38,5 +39,8 @@ func (w *Webhook) Send(ctx context.Context, msg Message) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("webhook: http %d", resp.StatusCode)
+	}
 	return nil
 }

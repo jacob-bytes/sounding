@@ -7,12 +7,12 @@ import (
 
 // AgentPayload Agent 上报体。
 type AgentPayload struct {
-	UUID    string  `json:"uuid"`
-	Name    string  `json:"name"`
-	Time    string  `json:"time"`
-	OSInfo  json.RawMessage `json:"os_info"`
-	Status  AgentStatus `json:"status"`
-	Probes  []ProbeTarget `json:"probes"`
+	UUID   string          `json:"uuid"`
+	Name   string          `json:"name"`
+	Time   string          `json:"time"`
+	OSInfo json.RawMessage `json:"os_info"`
+	Status AgentStatus     `json:"status"`
+	Probes []ProbeTarget   `json:"probes"`
 }
 
 // ProbeTarget Agent 上报的探针目标。
@@ -24,24 +24,25 @@ type ProbeTarget struct {
 
 // AgentStatus 上报状态（字段与 collect.Snapshot 对齐）。
 type AgentStatus struct {
-	CPU           float64 `json:"cpu"`
-	RAM           float64 `json:"ram"`
-	Swap          float64 `json:"swap"`
-	Load          float64 `json:"load"`
-	Disk          float64 `json:"disk"`
-	NetIn         float64 `json:"net_in"`
-	NetOut        float64 `json:"net_out"`
-	NetTotalUp    float64 `json:"net_total_up"`
-	NetTotalDown  float64 `json:"net_total_down"`
-	Process       float64 `json:"process"`
-	Connections   float64 `json:"connections"`
+	CPU            float64 `json:"cpu"`
+	RAM            float64 `json:"ram"`
+	Swap           float64 `json:"swap"`
+	Load           float64 `json:"load"`
+	Disk           float64 `json:"disk"`
+	NetIn          float64 `json:"net_in"`
+	NetOut         float64 `json:"net_out"`
+	NetTotalUp     float64 `json:"net_total_up"`
+	NetTotalDown   float64 `json:"net_total_down"`
+	Process        float64 `json:"process"`
+	Connections    float64 `json:"connections"`
 	ConnectionsUDP float64 `json:"connections_udp"`
-	Temp          float64 `json:"temp"`
-	Load5         float64 `json:"load5"`
-	Load15        float64 `json:"load15"`
-	RAMTotal      float64 `json:"ram_total"`
-	SwapTotal     float64 `json:"swap_total"`
-	DiskTotal     float64 `json:"disk_total"`
+	Temp           float64 `json:"temp"`
+	Load5          float64 `json:"load5"`
+	Load15         float64 `json:"load15"`
+	RAMTotal       float64 `json:"ram_total"`
+	SwapTotal      float64 `json:"swap_total"`
+	DiskTotal      float64 `json:"disk_total"`
+	Uptime         float64 `json:"uptime"`
 }
 
 // AgentEndpoint 处理 /agent/status（token 校验 + 入库）。

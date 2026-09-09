@@ -12,7 +12,7 @@ import (
 // Result 一次探测结果（Value 语义随 Type 变化）。
 type Result struct {
 	Type   string  `json:"type"`
-	Value  float64 `json:"value"`   // icmp/tcp: ms · http: ms · dns: ms
+	Value  float64 `json:"value"` // icmp/tcp: ms · http: ms · dns: ms
 	OK     bool    `json:"ok"`
 	Detail string  `json:"detail,omitempty"` // http: 状态码 · dns: 解析结果
 }

@@ -1,18 +1,14 @@
 package api
 
 import (
-	"encoding/json"
-	"log"
 	"time"
-
-	"github.com/gorilla/websocket"
 )
 
-// pushInterval 状态推送间隔。
-const pushInterval = 3 * time.Second
+// pushInterval 状态推送间隔（测试可覆盖）。
+var pushInterval = 3 * time.Second
 
 // serveWSPush 连接建立后周期推送 getNodesLatestStatus（管理页/ink 实时化）。
-func (h *Handler) serveWSPush(conn *websocket.Conn, stop <-chan struct{}) {
+func (h *Handler) serveWSPush(conn *wsWriter, stop <-chan struct{}) {
 	t := time.NewTicker(pushInterval)
 	defer t.Stop()
 	for {
@@ -45,11 +41,8 @@ func (h *Handler) serveWSPush(conn *websocket.Conn, stop <-chan struct{}) {
 }
 
 // startPush 在连接上启动推送协程。
-func (h *Handler) startPush(conn *websocket.Conn) chan struct{} {
+func (h *Handler) startPush(conn *wsWriter) chan struct{} {
 	stop := make(chan struct{})
 	go h.serveWSPush(conn, stop)
 	return stop
 }
-
-var _ = json.Marshal
-var _ = log.Printf

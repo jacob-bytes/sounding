@@ -67,8 +67,8 @@
 | 节点采集 | CPU / 内存 / Swap / 磁盘 / 网络 / 负载（1/5/15）/ 温度 / 系统信息 |
 | 探针 | **ICMP / TCP / HTTP / DNS** 四类型 · per-node 目标 · 全局任务 |
 | 实时 | **WebSocket JSON-RPC**（ink 秒级刷新）+ HTTP 轮询 |
-| 告警 | 离线 / 延迟 / 丢包 → **Telegram + Webhook**（运行时 CRUD，5min 去重） |
-| 认证 | JWT 登录（HS256）+ Admin Token |
+| 告警 | 离线 / 延迟 / 丢包 → **Telegram + Webhook**（运行时 CRUD + **SQLite 持久化**，5min 去重） |
+| 认证 | JWT 登录（HS256，管理 API 双轨鉴权）+ Admin Token（空值自动随机生成） |
 | 存储 | SQLite（WAL）· 自动保留清理 + VACUUM |
 | 管理 | 内置 `/admin/` 页面 + 完整 REST API + Agent 远程配置下发 |
 | 部署 | 单二进制 / Docker / 一键脚本 / 4 平台 Release |
@@ -77,10 +77,14 @@
 
 ```bash
 go build -o sounding-server ./cmd/server
-./sounding-server -addr :8080 -db sounding.db   # 自动迁移 + 演示种子
+# -seed 写入演示节点；token 未指定时会随机生成并打印到日志
+./sounding-server -addr :8080 -db sounding.db -seed \
+  -agent-token sounding-demo-token -admin-token sounding-demo-admin
 ```
 
 打开管理页：**http://localhost:8080/admin/**（添加节点 / 配置探针 / 告警规则）
+
+> **安全默认**：`-agent-token` / `-admin-token` / `-jwt-secret` 为空时自动随机生成并打印到启动日志（不再使用固定弱口令）；管理 API 支持 `X-Admin-Token` 与 JWT 双轨鉴权。生产环境请显式配置或妥善保存日志中的随机值。
 
 验证端点（JSON-RPC 2.0——ink 同款）：
 
@@ -102,7 +106,8 @@ go build -o sounding-agent ./cmd/agent
 
 ```bash
 # 完整运行（主控 + 探针 + 管理后台）
-./sounding-server -addr :8080 -db sounding.db -static ./ink-dist
+./sounding-server -addr :8080 -db sounding.db -static ./ink-dist \
+  -agent-token sounding-demo-token -admin-token sounding-demo-admin
 # → http://localhost:8080 即 ink 管理后台（图表/探针/节点全可看）
 ```
 
@@ -162,12 +167,16 @@ docker run -d --name sounding \
   -v sounding-data:/data \
   -e SOUNDING_AGENT_TOKEN=changeme-agent \
   -e SOUNDING_ADMIN_TOKEN=changeme-admin \
+  -e SOUNDING_ADMIN_USER=admin -e SOUNDING_ADMIN_PASS=changeme-pass \
   ghcr.io/jacob-bytes/sounding:latest
 
-# 带 ink 监控面板（挂载前端构建产物）
+# 带 ink 监控面板（挂载前端构建产物）+ 演示数据
 docker run -d -p 8080:8080 -v sounding-data:/data -v ./ink-dist:/admin \
-  ghcr.io/jacob-bytes/sounding:latest -static /admin
+  -e SOUNDING_AGENT_TOKEN=changeme-agent -e SOUNDING_ADMIN_TOKEN=changeme-admin \
+  ghcr.io/jacob-bytes/sounding:latest -static /admin -seed
 ```
+
+> 主控同样支持 `SOUNDING_AGENT_TOKEN` / `SOUNDING_ADMIN_TOKEN` / `SOUNDING_ADMIN_USER` / `SOUNDING_ADMIN_PASS` / `SOUNDING_JWT_SECRET` 环境变量（CLI flag 优先级更高）。
 
 ### 方式三：二进制 / 源码
 
@@ -391,8 +400,9 @@ cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
 |---|---|
 | **ICMP 真探测** | 默认启用（非特权 ICMP，失败自动回退 TCP） |
 | **离线判定** | 60s 无上报标记离线（前端卡片灰显） |
-| **告警通知** | **Telegram**：`-telegram-token <bot> -telegram-chat-id <id>`；**Webhook**：`-alert-webhook <url>`（可同时启用，5 分钟去重） |
-| **JWT 登录** | `-admin-user admin -admin-pass <pw> -jwt-secret <secret>` → `POST /api/login` |
+| **告警通知** | **Telegram**：`-telegram-token <bot> -telegram-chat-id <id>`；**Webhook**：`-alert-webhook <url>`（可同时启用，5 分钟去重；**规则持久化到 SQLite**，重启不丢） |
+| **JWT 登录** | `-admin-user admin -admin-pass <pw> -jwt-secret <secret>` → `POST /api/login`；管理 API 支持 `Authorization: Bearer <jwt>` 与 `X-Admin-Token` 双轨 |
+| **安全默认** | token/密钥为空时自动随机生成并打印到日志（不再有固定默认口令） |
 | **历史保留** | `-retain-days 30`（6 小时清理 + VACUUM） |
 | **健康检查** | `GET /healthz`（LB/K8s 探针） |
 | **实时通道** | `/public` 返回 `theme_settings.rpcTransportMode=websocket` → ink 自动走 WS（秒级推送） |

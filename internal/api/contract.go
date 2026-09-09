@@ -2,29 +2,29 @@ package api
 
 // Client ink 契约：getNodes 返回 map[uuid]Client。
 type Client struct {
-	UUID             string   `json:"uuid"`
-	Name             string   `json:"name"`
-	CPUName          string   `json:"cpu_name"`
-	Virtualization   string   `json:"virtualization"`
-	Arch             string   `json:"arch"`
-	CPUCores         float64  `json:"cpu_cores"`
-	OS               string   `json:"os"`
-	KernelVersion    string   `json:"kernel_version"`
-	Region           string   `json:"region"`
-	PublicRemark     string   `json:"public_remark"`
-	MemTotal         float64  `json:"mem_total"`
-	SwapTotal        float64  `json:"swap_total"`
-	DiskTotal        float64  `json:"disk_total"`
-	Weight           float64  `json:"weight"`
-	Price            float64  `json:"price"`
-	BillingCycle     float64  `json:"billing_cycle"`
-	AutoRenewal      bool     `json:"auto_renewal"`
-	Currency         string   `json:"currency"`
-	ExpiredAt        string   `json:"expired_at"`
-	Group            string   `json:"group"`
-	Groups           []string `json:"groups"`
-	Tags             string   `json:"tags"`
-	Hidden           bool     `json:"hidden"`
+	UUID           string   `json:"uuid"`
+	Name           string   `json:"name"`
+	CPUName        string   `json:"cpu_name"`
+	Virtualization string   `json:"virtualization"`
+	Arch           string   `json:"arch"`
+	CPUCores       float64  `json:"cpu_cores"`
+	OS             string   `json:"os"`
+	KernelVersion  string   `json:"kernel_version"`
+	Region         string   `json:"region"`
+	PublicRemark   string   `json:"public_remark"`
+	MemTotal       float64  `json:"mem_total"`
+	SwapTotal      float64  `json:"swap_total"`
+	DiskTotal      float64  `json:"disk_total"`
+	Weight         float64  `json:"weight"`
+	Price          float64  `json:"price"`
+	BillingCycle   float64  `json:"billing_cycle"`
+	AutoRenewal    bool     `json:"auto_renewal"`
+	Currency       string   `json:"currency"`
+	ExpiredAt      string   `json:"expired_at"`
+	Group          string   `json:"group"`
+	Groups         []string `json:"groups"`
+	Tags           string   `json:"tags"`
+	Hidden         bool     `json:"hidden"`
 }
 
 // NodeStatusPing 探针汇总（ink 契约）。

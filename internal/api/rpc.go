@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/jacob-bytes/sounding/internal/version"
 )
 
 // RPCRequest 对应 ink rpc.ts 的 JSON-RPC 2.0 请求。
@@ -30,48 +32,51 @@ type RPCError struct {
 
 // NodeRecord / StatusRecord 契约类型（对齐 contracts/contracts.md）。
 type NodeRecord struct {
-	UUID          string   `json:"uuid"`
-	Name          string   `json:"name"`
-	CPUName       string   `json:"cpu_name"`
-	Virtualization string  `json:"virtualization"`
-	Arch          string   `json:"arch"`
-	CPUCores      float64  `json:"cpu_cores"`
-	OS            string   `json:"os"`
-	Region        string   `json:"region"`
-	MemTotal      float64  `json:"mem_total"`
-	SwapTotal     float64  `json:"swap_total"`
-	DiskTotal     float64  `json:"disk_total"`
-	Price         float64  `json:"price"`
-	BillingCycle  float64  `json:"billing_cycle"`
-	Currency      string   `json:"currency"`
-	ExpiredAt     string   `json:"expired_at"`
-	Group         string   `json:"group"`
-	Groups        []string `json:"groups"`
-	Tags          string   `json:"tags"`
-	PublicRemark  string   `json:"public_remark"`
-	Online        bool     `json:"online"`
-	Uptime        float64  `json:"uptime"`
+	UUID           string   `json:"uuid"`
+	Name           string   `json:"name"`
+	CPUName        string   `json:"cpu_name"`
+	Virtualization string   `json:"virtualization"`
+	Arch           string   `json:"arch"`
+	CPUCores       float64  `json:"cpu_cores"`
+	OS             string   `json:"os"`
+	Region         string   `json:"region"`
+	MemTotal       float64  `json:"mem_total"`
+	SwapTotal      float64  `json:"swap_total"`
+	DiskTotal      float64  `json:"disk_total"`
+	Price          float64  `json:"price"`
+	BillingCycle   float64  `json:"billing_cycle"`
+	Currency       string   `json:"currency"`
+	ExpiredAt      string   `json:"expired_at"`
+	Group          string   `json:"group"`
+	Groups         []string `json:"groups"`
+	Tags           string   `json:"tags"`
+	PublicRemark   string   `json:"public_remark"`
+	Online         bool     `json:"online"`
+	Uptime         float64  `json:"uptime"`
 }
 
 // StatusRecord 状态记录（字段与 ink StatusRecord 对齐）。
 type StatusRecord struct {
-	Client        string  `json:"client"`
-	Time          string  `json:"time"`
-	CPU           float64 `json:"cpu"`
-	RAM           float64 `json:"ram"`
-	Swap          float64 `json:"swap"`
-	Load          float64 `json:"load"`
-	Disk          float64 `json:"disk"`
-	NetIn         float64 `json:"net_in"`
-	NetOut        float64 `json:"net_out"`
-	NetTotalUp    float64 `json:"net_total_up"`
-	NetTotalDown  float64 `json:"net_total_down"`
-	Process       float64 `json:"process"`
-	Connections   float64 `json:"connections"`
+	Client         string  `json:"client"`
+	Time           string  `json:"time"`
+	CPU            float64 `json:"cpu"`
+	RAM            float64 `json:"ram"`
+	Swap           float64 `json:"swap"`
+	Load           float64 `json:"load"`
+	Load5          float64 `json:"load5"`
+	Load15         float64 `json:"load15"`
+	Temp           float64 `json:"temp"`
+	Disk           float64 `json:"disk"`
+	NetIn          float64 `json:"net_in"`
+	NetOut         float64 `json:"net_out"`
+	NetTotalUp     float64 `json:"net_total_up"`
+	NetTotalDown   float64 `json:"net_total_down"`
+	Process        float64 `json:"process"`
+	Connections    float64 `json:"connections"`
 	ConnectionsUDP float64 `json:"connections_udp"`
-	RAMTotal      float64 `json:"ram_total"`
-	SwapTotal     float64 `json:"swap_total"`
-	DiskTotal     float64 `json:"disk_total"`
+	RAMTotal       float64 `json:"ram_total"`
+	SwapTotal      float64 `json:"swap_total"`
+	DiskTotal      float64 `json:"disk_total"`
 }
 
 // Handler JSON-RPC 处理器（依赖注入 store）。
@@ -126,7 +131,7 @@ func (h *Handler) dispatch(req RPCRequest) RPCResponse {
 	case "getMethods":
 		result = []string{"getMethods", "getVersion", "getClient", "getHelp", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus", "getPingRecords"}
 	case "getVersion":
-		result = map[string]string{"version": "0.1.0"}
+		result = map[string]string{"version": version.String()}
 	case "getClient":
 		result = map[string]any{"ip": "", "country": "CN", "country_code": "CN", "asn": "", "isp": ""}
 	case "getHelp":

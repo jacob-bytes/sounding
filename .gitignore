@@ -1,4 +1,5 @@
 .gomodcache/
+.gocache/
 sounding-server
 sounding-agent
 agent

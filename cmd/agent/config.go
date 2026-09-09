@@ -23,9 +23,9 @@ type FileConfig struct {
 
 // ConfigStore 带热重载的配置（SIGHUP + mtime 轮询）。
 type ConfigStore struct {
-	mu     sync.RWMutex
-	path   string
-	cfg    FileConfig
+	mu      sync.RWMutex
+	path    string
+	cfg     FileConfig
 	lastMod time.Time
 }
 
@@ -87,38 +87,29 @@ func (cs *ConfigStore) reload() {
 	log.Printf("config: 已加载 %s（server=%s, probes=%d）", cs.path, f.Server, len(f.Probes))
 }
 
-// Server 返回当前 server（flag > env > file > 默认）。
-func (cs *ConfigStore) Server(def string) string {
+// Server 返回配置文件中的 server（空表示未配置，优先级由调用方决定）。
+func (cs *ConfigStore) Server() string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
-	if cs.cfg.Server != "" {
-		return cs.cfg.Server
-	}
-	return def
+	return cs.cfg.Server
 }
 
-// Token 返回当前 token。
-func (cs *ConfigStore) Token(def string) string {
+// Token 返回配置文件中的 token。
+func (cs *ConfigStore) Token() string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
-	if cs.cfg.Token != "" {
-		return cs.cfg.Token
-	}
-	return def
+	return cs.cfg.Token
 }
 
-// NodeUUID 返回节点 uuid（文件为空回退）。
-func (cs *ConfigStore) NodeUUID(def string) string {
+// NodeUUID 返回配置文件中的节点 uuid。
+func (cs *ConfigStore) NodeUUID() string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
-	if cs.cfg.NodeUUID != "" {
-		return cs.cfg.NodeUUID
-	}
-	return def
+	return cs.cfg.NodeUUID
 }
 
-// Interval 返回采集周期。
-func (cs *ConfigStore) Interval(def time.Duration) time.Duration {
+// Interval 返回配置文件中的采集周期（未配置/非法返回 0）。
+func (cs *ConfigStore) Interval() time.Duration {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 	if cs.cfg.Interval != "" {
@@ -126,7 +117,7 @@ func (cs *ConfigStore) Interval(def time.Duration) time.Duration {
 			return d
 		}
 	}
-	return def
+	return 0
 }
 
 // Probes 返回探针配置字符串（热重载后取最新）。

@@ -8,12 +8,12 @@ import (
 
 // Task 探针任务定义。
 type Task struct {
-	ID       int    `json:"id"`
-	Target   string `json:"target"`   // 主机/IP 或 URL
-	Type     string `json:"type"`     // ping | http
-	Name     string `json:"name"`     // 运营商标签（上海移动等）
-	Interval time.Duration `json:"-"` // 周期
-	Enabled  bool   `json:"enabled"`
+	ID       int           `json:"id"`
+	Target   string        `json:"target"` // 主机/IP 或 URL
+	Type     string        `json:"type"`   // ping | http
+	Name     string        `json:"name"`   // 运营商标签（上海移动等）
+	Interval time.Duration `json:"-"`      // 周期
+	Enabled  bool          `json:"enabled"`
 }
 
 // Record 一次探测结果。
