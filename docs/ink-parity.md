@@ -1,11 +1,29 @@
 # sounding 自研面板 vs ink 主题：差异分析与复刻路线
 
-> 对照源码：[komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)（本地 `../komari-theme-ink`，v0.6.6）。
 > 结论先行：**ink 是 26k+ 行的完整产品，sounding 自研面板是 ~1.1k 行的轻量降级方案**。
 > 想「尽量复刻」有两条路，建议同时走：
 >
-> 1. **直接挂载真实 ink dist**（推荐）——sounding 已实现 ink 所需的 RPC 契约，实测零改动即可跑通首页/详情/图表；`scripts/install.sh deploy` 会自动下载安装。
+> 1. **直接挂载真实 ink 产物**（推荐）——sounding 已实现 ink 所需的 RPC 契约，用官方 Release zip 实测零改动即可跑通首页/详情/图表；`scripts/install.sh deploy` 会自动下载安装。
 > 2. **自研面板增量对齐**——按本文 P0→P2 优先级补齐视觉与交互，作为无 ink 产物时的兜底。
+
+## 0. 基线（重要，先校准再动手）
+
+本文所有结论基于以下**明确固定**的基线，避免「本地开发版 / 官方 Release / 远端 main」三者漂移：
+
+| 项 | 值 |
+|---|---|
+| ink 源码仓库 | `../komari-theme-ink`（[GitHub](https://github.com/jacob-bytes/komari-theme-ink)） |
+| 源码 commit / 版本 | `d128cf0` / `v0.6.8`（2026-09-10） |
+| 验证用 Release 产物 | `ink-build-30c4eff.zip`（`v0.6.7`，`dist` 内置 `VITE_API_BASE=/api`） |
+| 实测结果 | sounding-server 挂载该产物：首页 2 卡片、详情 7 图表 canvas、**0 控制台错误** |
+
+> ⚠️ **不要用 ink 仓库里的 `dist/` 直接测试**：本地开发构建可能把 `VITE_API_BASE` 烘焙成 `http://localhost:8100`（我第一次就踩了这个坑），需要替换或重新构建。**官方 Release zip 是 `/api` 同源，零配置可用。**
+>
+> 远端可能领先本地，动手前先校准：
+> ```bash
+> cd ../komari-theme-ink && git fetch origin && git log --oneline -1 origin/main
+> sh ../sounding/scripts/ink-inventory.sh ../komari-theme-ink   # 打印下方全部基线指标
+> ```
 
 ---
 
@@ -13,10 +31,10 @@
 
 | 维度 | ink 主题 | sounding `web/dashboard` |
 |---|---|---|
-| 源码规模 | ≈ 26,000 行（Vue/TS） | ≈ 1,100 行 |
-| 视图 | `HomeView` + `InstanceDetail` | `DashboardView` + `NodeDetailView` |
-| 组件数 | 90+（含 40+ UI 原子组件） | 8 |
-| 主题配置项 | 49 项（`komari-theme.json`） | 0（硬编码） |
+| 源码规模 | 26,033 行（57 个 `.vue` + 79 个 `.ts`） | ≈ 1,100 行 |
+| 视图 | `HomeView` + `InstanceDetail` + `NotFoundView` | `DashboardView` + `NodeDetailView` |
+| 组件数 | 53 个组件（含 30 个 UI 原子组件） | 8 |
+| 主题配置项 | 49 项 / 42 个 key（`komari-theme.json`） | 0（硬编码） |
 | 状态管理 | Pinia（`stores/app.ts` 1.2k 行 + `stores/nodes.ts`） | 2 个 composable |
 | 图表 | LoadChart 1.8k 行 + PingChart 958 行 + 虚拟滚动 | 1 个 ECharts 折线图 |
 | 后端调用 | JSON-RPC + REST + WS + metrics 体系 | 4 个 RPC 方法 |
@@ -95,9 +113,9 @@ ink 实际调用（`src/utils/rpc.ts`）与 sounding 实现对照：
 | `recordVisitorEvent` | `public:recordVisitorEvent` | ⚠️ 返回 `disabled` |
 | `getClient` | `rpc.getClient` | ✅（空指纹） |
 
-**实测**：`sounding-server -static <ink-dist>` + 演示数据，Playwright 加载首页 **2 张节点卡、0 控制台错误**；点击进入详情页 **设备信息 + 7 个图表 canvas、0 错误**。
+**实测**（官方 Release 产物 `ink-build-30c4eff.zip` / v0.6.7）：`sounding-server -static <release-dist>` + 演示数据，Playwright 加载首页 **2 张节点卡、0 控制台错误**；点击进入详情页 **设备信息 + 7 个图表 canvas、0 错误**。
 
-> 注意：ink dist 若在构建时写了 `VITE_API_BASE=http://localhost:8100`，需同源部署时用 `VITE_API_BASE=/api` 重新构建，或由 `install.sh` 下载官方 Release 包（默认同源 `/api`）。
+> 注意：只有 **本地开发构建** 的 `dist/` 可能烘焙 `VITE_API_BASE=http://localhost:8100`；官方 Release zip 与 `install.sh` 下载的产物都是同源 `/api`，无需修改。若自建，务必 `VITE_API_BASE=/api bun run build`。
 
 ## 7. 复刻路线（建议）
 

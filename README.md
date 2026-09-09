@@ -17,7 +17,7 @@
 | 认证 | JWT（HS256）+ Admin Token 双轨；空 token/密钥自动随机生成并持久化 |
 | 存储 | SQLite（WAL）· 自动保留清理 + VACUUM |
 | 管理 | 内置 `/admin/` 页面 + REST API + Agent 远程配置下发 |
-| **ink 兼容** | 实现 ink 全量 RPC 契约，**真实 ink 主题零改动接入**（首页/详情/图表已实测） |
+| **ink 兼容** | 实现 ink 全量 RPC 契约，**官方 Release 产物零改动接入**（v0.6.7 实测：首页/详情/图表 0 报错） |
 | 部署 | 单二进制 / Docker / 一键脚本（deploy·agent·docker·status·uninstall）/ 4 平台 Release |
 
 ## 截图
@@ -80,11 +80,11 @@ go build -o sounding-agent ./cmd/agent
 
 | 方案 | 说明 |
 |---|---|
-| **① ink 主题（推荐）** | 挂载 ink `dist/`，功能完整、零改动；`install.sh deploy` 自动安装到 `/var/lib/sounding/admin` |
+| **① ink 主题（推荐）** | 挂载 ink **官方 Release** `dist/`，功能完整、零改动；`install.sh deploy` 自动安装到 `/var/lib/sounding/admin` |
 | **② 自研轻量面板** | `web/dashboard/`（Vue 3 + Vite + Tailwind），适合内网/单二进制兜底 |
 
 ```bash
-# 挂载 ink（同源构建务必 VITE_API_BASE=/api）
+# 挂载 ink：优先用官方 Release zip；自建务必 VITE_API_BASE=/api（本地 dist 可能烘焙了 localhost:8100）
 cd komari-theme-ink && VITE_API_BASE=/api bun run build
 ./sounding-server -addr :8080 -db sounding.db -static ./komari-theme-ink/dist
 

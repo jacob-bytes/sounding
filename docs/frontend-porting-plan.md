@@ -21,12 +21,26 @@
 
 ---
 
-## P0-0 基线与对比环境
+## P0-0 基线校准与对比环境
+
+**先固定 ink 基线**（本地 / 远端 / Release 三者可能漂移，动手前必做）：
+
+```bash
+# 1. 远端是否领先本地（有网时）
+cd ../komari-theme-ink && git fetch origin && git log --oneline -1 origin/main
+
+# 2. 打印基线指标（commit/版本/文件数/配置 key/最新 Release zip）
+sh ../sounding/scripts/ink-inventory.sh ../komari-theme-ink
+
+# 3. 用「官方 Release zip」而不是仓库里的 dist/（后者可能烘焙了 localhost:8100）
+unzip -q ink-build-<sha>.zip -d /tmp/ink-release
+grep -o '"/api"' /tmp/ink-release/dist/assets/*.js | head -1   # 确认同源
+```
 
 1. 启动后端（演示数据 + 挂载两种面板）：
    ```bash
-   # 终端 A：后端（先挂 ink）
-   go run ./cmd/server -addr :8080 -db /tmp/dev.db -seed -static /path/to/ink/dist
+   # 终端 A：后端（挂官方 Release 产物）
+   go run ./cmd/server -addr :8080 -db /tmp/dev.db -seed -static /tmp/ink-release/dist
    # 终端 B：自研面板 dev（Vite proxy 到 :8080）
    cd web/dashboard && bun install && bun run dev
    ```
@@ -34,13 +48,16 @@
    - ink：`http://localhost:8080/`、`/node/<uuid>`
    - 自研：`http://localhost:5173/`、`/node/<uuid>`
 3. 产物放 `docs/screenshots/{ink,self}-{home,detail}-{light,dark}.png`，作为每阶段回归基线。
-4. 对照源码：
+4. 对照源码（与基线 commit 一致）：
    - token：`komari-theme-ink/src/styles/main.css`
    - 首页：`views/HomeView.vue`、`components/NodeGeneralCards.vue`、`NodeList.vue`
    - 卡片：`components/NodeCard.vue`
    - 详情：`views/InstanceDetail.vue`、`components/LoadChart.vue`、`PingChart.vue`
 
-**验收**：`docs/screenshots/` 下 8 张基线截图齐全。
+> 本文当前基线：ink `d128cf0` / v0.6.8；验证产物 `ink-build-30c4eff.zip` / v0.6.7。
+> 若 `ink-inventory.sh` 输出的 commit/version 与上面不一致，**先更新 [ink-parity.md](./ink-parity.md) 的基线表**，再开始移植。
+
+**验收**：`docs/screenshots/` 下 8 张基线截图齐全；`ink-inventory.sh` 输出与文档基线一致。
 
 ---
 
