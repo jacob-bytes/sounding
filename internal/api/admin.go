@@ -38,12 +38,13 @@ func (h *AdminEndpoint) statusProvider() any {
 
 // AdminProbe 管理视角探针任务。
 type AdminProbe struct {
-	ID      int    `json:"id"`
-	Client  string `json:"client"`
-	Target  string `json:"target"`
-	Name    string `json:"name"`
-	Type    string `json:"type"`
-	Enabled bool   `json:"enabled"`
+	ID          int     `json:"id"`
+	Client      string  `json:"client"`
+	Target      string  `json:"target"`
+	Name        string  `json:"name"`
+	Type        string  `json:"type"`
+	IntervalSec float64 `json:"interval_sec"`
+	Enabled     bool    `json:"enabled"`
 }
 
 // NewAdminEndpoint 构建管理端点。

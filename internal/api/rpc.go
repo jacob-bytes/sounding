@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
-
-	"github.com/jacob-bytes/sounding/internal/version"
 )
 
 // RPCRequest 对应 ink rpc.ts 的 JSON-RPC 2.0 请求。
@@ -87,6 +85,8 @@ type Handler struct {
 		RecentStatus(client string, limit int) (map[string]any, error)
 		PingRecords(client string, taskID int, limit int) ([]PingRecord, error)
 	}
+	publicSettings func() map[string]any
+	version        string
 }
 
 // NewHandler 构建处理器。
@@ -128,14 +128,8 @@ func (h *Handler) dispatch(req RPCRequest) RPCResponse {
 	switch method {
 	case "ping":
 		result = "pong"
-	case "getMethods":
-		result = []string{"getMethods", "getVersion", "getClient", "getHelp", "getNodes", "getNodesLatestStatus", "getNodeRecentStatus", "getPingRecords"}
-	case "getVersion":
-		result = map[string]string{"version": version.String()}
 	case "getClient":
 		result = map[string]any{"ip": "", "country": "CN", "country_code": "CN", "asn": "", "isp": ""}
-	case "getHelp":
-		result = "<html><body><h1>sounding</h1></body></html>"
 	case "getNodes":
 		result, err = h.store.Nodes()
 	case "getNodesLatestStatus":
@@ -151,27 +145,12 @@ func (h *Handler) dispatch(req RPCRequest) RPCResponse {
 			p.Limit = 150
 		}
 		result, err = h.store.PingRecords(p.Client, p.TaskID, p.Limit)
-	case "getNodeRecentStatus":
-		var p struct {
-			Client string `json:"client"`
-			Limit  int    `json:"limit"`
-		}
-		if e := json.Unmarshal(req.Params, &p); e != nil {
-			var arr []json.RawMessage
-			_ = json.Unmarshal(req.Params, &arr)
-			if len(arr) > 0 {
-				_ = json.Unmarshal(arr[0], &p.Client)
-			}
-			if len(arr) > 1 {
-				_ = json.Unmarshal(arr[1], &p.Limit)
-			}
-		}
-		if p.Limit <= 0 {
-			p.Limit = 150
-		}
-		result, err = h.store.RecentStatus(p.Client, p.Limit)
 	default:
-		return RPCResponse{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32601, Message: "method not found: " + req.Method}}
+		if res, ok := h.dispatchKomari(method, req); ok {
+			result = res
+		} else {
+			return RPCResponse{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32601, Message: "method not found: " + req.Method}}
+		}
 	}
 	if err != nil {
 		return RPCResponse{JSONRPC: "2.0", ID: req.ID, Error: &RPCError{Code: -32000, Message: err.Error()}}

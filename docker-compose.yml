@@ -1,10 +1,47 @@
-# sounding 编排示例：主控（含管理后台）+ Agent（可选）
+# sounding 编排：主控（含 ink 面板）+ 可选 Agent
+#
+#   export SOUNDING_AGENT_TOKEN=xxx SOUNDING_ADMIN_TOKEN=yyy   # 可选：自定义 token
+#   docker compose up -d                       # 启动主控
+#   docker compose --profile agent up -d       # 同时启动本机 Agent
+#
+# 默认端口 8080，数据持久化在 ./data，ink 面板在 ./admin
 services:
   server:
     build: .
+    image: ghcr.io/jacob-bytes/sounding:latest
+    container_name: sounding
+    restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${SOUNDING_PORT:-8080}:8080"
     volumes:
       - ./data:/data
-      - ./admin:/admin        # ink 前端构建产物（管理后台 UI）
-    command: ["-addr", ":8080", "-db", "/data/sounding.db", "-static", "/admin", "-agent-token", "${SOUNDING_AGENT_TOKEN:-changeme-agent}", "-admin-token", "${SOUNDING_ADMIN_TOKEN:-changeme-admin}"]
+      - ./admin:/admin        # ink 前端构建产物（可选；镜像已内置 /admin）
+    environment:
+      SOUNDING_AGENT_TOKEN: ${SOUNDING_AGENT_TOKEN:-changeme-agent}
+      SOUNDING_ADMIN_TOKEN: ${SOUNDING_ADMIN_TOKEN:-changeme-admin}
+      SOUNDING_ADMIN_USER: ${SOUNDING_ADMIN_USER:-admin}
+      SOUNDING_ADMIN_PASS: ${SOUNDING_ADMIN_PASS:-changeme-pass}
+    command: ["-addr", ":8080", "-db", "/data/sounding.db", "-static", "/admin", "-retain-days", "30"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # 可选：在 Compose 主机上跑一个 Agent（默认不启动）
+  agent:
+    profiles: ["agent"]
+    image: ghcr.io/jacob-bytes/sounding:latest
+    container_name: sounding-agent
+    restart: unless-stopped
+    entrypoint: ["sounding-agent"]
+    depends_on:
+      server:
+        condition: service_healthy
+    environment:
+      SOUNDING_SERVER: http://server:8080
+      SOUNDING_TOKEN: ${SOUNDING_AGENT_TOKEN:-changeme-agent}
+      SOUNDING_NODE_UUID: ${SOUNDING_NODE_UUID:-compose-agent}
+      SOUNDING_INTERVAL: ${SOUNDING_INTERVAL:-15s}
+    command: ["-probe", "${SOUNDING_PROBES:-阿里 DNS:223.5.5.5,腾讯 DNS:119.29.29.29}"]

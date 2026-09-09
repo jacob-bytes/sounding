@@ -71,7 +71,8 @@
 | 认证 | JWT 登录（HS256，管理 API 双轨鉴权）+ Admin Token（空值自动随机生成） |
 | 存储 | SQLite（WAL）· 自动保留清理 + VACUUM |
 | 管理 | 内置 `/admin/` 页面 + 完整 REST API + Agent 远程配置下发 |
-| 部署 | 单二进制 / Docker / 一键脚本 / 4 平台 Release |
+| **ink 兼容** | `getNodes` / `getRecords` / `queryMetrics` / `getPingMetricStats` / `getPublicSettings` 等 **ink 全量 RPC 契约**，真实 ink 面板零改动接入（已实测） |
+| 部署 | 单二进制 / Docker / **一键脚本（deploy·agent·docker·status·uninstall）** / 4 平台 Release |
 
 ## 快速开始
 
@@ -131,16 +132,18 @@ go build -o sounding-agent ./cmd/agent
 ```text
 cmd/server         主控入口
 cmd/agent          Agent 入口（含 -config 热重载 / -remote-config 远程拉取）
-internal/api       JSON-RPC 2.0 + WS 处理器（契约实现）+ 管理 API
-internal/store     SQLite 存储（nodes/status_history/probe_*）+ 保留策略
-internal/collect   Agent 采集（gopsutil：CPU/内存/磁盘/网络/温度/负载）
-internal/probe     探针（ICMP/TCP）+ 调度器
+internal/api       JSON-RPC 2.0 + WS 处理器（含 ink/Komari 全量契约）+ 管理 API
+internal/store     SQLite 存储（nodes/status_history/probe_*/alert_rules/secrets）+ 保留策略
+internal/collect   Agent 采集（gopsutil：CPU/内存/磁盘/网络/温度/负载/uptime）
+internal/probe     探针（ICMP/TCP/HTTP/DNS）+ 调度器
 internal/alert     告警规则 + 去重 + 多渠道投递
-internal/notify    通知渠道（Notifier 接口：Telegram / Webhook）
+internal/notify    通知渠道（Notifier 接口：Telegram/Webhook/钉钉/飞书/邮件）
 internal/auth      JWT 签发/校验
 internal/adminui   内置管理页（Go embed）
+web/dashboard      自研轻量面板（Vue 3 + Vite）
 contracts/         RPC 契约清单（字段级）
-scripts/           一键安装脚本
+docs/ink-parity.md 自研面板 vs ink 差异分析与复刻路线
+scripts/           一键安装/部署脚本（install.sh）
 ```
 
 
@@ -148,16 +151,44 @@ scripts/           一键安装脚本
 
 ## 主控部署（sounding-server）
 
-### 方式一：一键脚本（推荐——含 ink 监控面板）
+### 方式一：一键部署（推荐）
+
+**主控**（二进制 + ink 面板 + systemd，自动生成 token 并做健康检查）：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | sh -s -- server
+curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | sh -s -- deploy
 ```
 
 脚本会自动完成：
-1. 下载 `sounding-server`（按 OS/架构）
-2. **下载 ink 监控面板** → `/var/lib/sounding/admin`（sounding 自动挂载）
-3. 打印启动命令（管理页 + 面板地址）
+1. 识别 OS/架构 → 下载最新 `sounding-server` 到 `/usr/local/bin`
+2. **下载 ink 监控面板** → `/var/lib/sounding/admin`（sounding 自动挂载，零配置）
+3. 未提供 token 时自动随机生成并打印（**请妥善保存**）
+4. Linux 写入并启用 `sounding-server.service`；非 Linux 打印启动命令
+5. `curl /healthz` 健康检查 + 打印管理页/面板/Agent 接入命令
+
+**节点 Agent**（一条命令接入主控）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | \
+  SOUNDING_AGENT_SERVER=http://<主控>:8080 SOUNDING_AGENT_TOKEN=<agent-token> sh -s -- agent
+```
+
+**Docker 一键启动**（自动生成 token）：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/jacob-bytes/sounding/main/scripts/install.sh | sh -s -- docker
+```
+
+**其它运维命令**：
+
+```bash
+sh scripts/install.sh status server       # 状态 + 健康检查
+sh scripts/install.sh update server       # 更新（保留数据/配置）
+sh scripts/install.sh uninstall server    # 卸载（默认保留数据，REMOVE_DATA=1 一并删除）
+sh scripts/install.sh help                # 全部用法
+```
+
+> 常用环境变量：`SOUNDING_VERSION`（锁定版本）、`SOUNDING_PORT`、`SOUNDING_AGENT_TOKEN`、`SOUNDING_ADMIN_TOKEN`、`SOUNDING_ADMIN_DIR`、`BIN_DIR`。
 
 ### 方式二：Docker
 
@@ -177,6 +208,15 @@ docker run -d -p 8080:8080 -v sounding-data:/data -v ./ink-dist:/admin \
 ```
 
 > 主控同样支持 `SOUNDING_AGENT_TOKEN` / `SOUNDING_ADMIN_TOKEN` / `SOUNDING_ADMIN_USER` / `SOUNDING_ADMIN_PASS` / `SOUNDING_JWT_SECRET` 环境变量（CLI flag 优先级更高）。
+
+**Docker Compose**（主控 + 可选本机 Agent + 健康检查）：
+
+```bash
+docker compose up -d                        # 主控（含 healthcheck）
+docker compose --profile agent up -d        # 同时启动本机 Agent
+```
+
+镜像内同时包含 `sounding-server` 与 `sounding-agent` 两个二进制，Agent 服务用 `entrypoint: ["sounding-agent"]` 即可复用同一镜像。
 
 ### 方式三：二进制 / 源码
 
@@ -200,12 +240,15 @@ go build -o sounding-server ./cmd/server
 | **管理页** | `http://<主机>:8080/admin/`（首次访问输入 Admin Token） |
 | **ink 监控面板** | `http://<主机>:8080/`（一键脚本自动安装；或 `-static <ink-dist>`） |
 | 健康检查 | `http://<主机>:8080/healthz` |
-| Agent 接入 | 各节点执行 `sounding-agent -server http://<主机>:8080 -token <agent-token>` |
+| Agent 接入 | `install.sh deploy` 会自动打印带 token 的接入命令 |
 
 ### 方式四：systemd 服务（脚本一键生成）
 
 ```bash
-# 安装二进制 + 生成并启用 systemd 服务
+# 推荐：deploy 已包含「安装二进制 + ink 面板 + systemd + 健康检查」
+curl -fsSL .../install.sh | sh -s -- deploy
+
+# 或仅生成 systemd 服务（token 用环境变量传入）
 SOUNDING_AGENT_TOKEN=xxx SOUNDING_ADMIN_TOKEN=yyy \
   sh scripts/install.sh systemd server
 
@@ -245,15 +288,21 @@ WantedBy=multi-user.target
 ```
 </details>
 
-### 更新
+### 更新 / 状态 / 卸载
 
 ```bash
-# 重跑安装命令即可（二进制替换，数据/配置/systemd 服务保持不变）
-sh scripts/install.sh update server     # 或 update agent
-sudo systemctl restart sounding-server  # systemd 部署需重启
+# 更新（二进制替换，数据/配置/systemd 服务保持不变）
+sh scripts/install.sh update server       # 或 update agent
+sudo systemctl restart sounding-server    # systemd 部署需重启
 
 # 指定版本
 SOUNDING_VERSION=v0.3.0 sh scripts/install.sh update server
+
+# 状态（版本 + systemd + /healthz）
+sh scripts/install.sh status server
+
+# 卸载（默认保留 /var/lib/sounding 数据；REMOVE_DATA=1 一并删除）
+REMOVE_DATA=1 sh scripts/install.sh uninstall server
 
 # 查看当前版本
 sounding-server -version
@@ -361,38 +410,77 @@ SOUNDING_PROBES="上海移动:223.5.5.5,腾讯 DNS:119.29.29.29" \
 ## Docker / Release
 
 ```bash
-docker compose up -d   # 主控（挂载 ./admin 为 ink 管理后台）
-# 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 → Release
+docker compose up -d                      # 主控（healthcheck + ./data 持久化）
+docker compose --profile agent up -d      # 同时启动本机 Agent（复用同一镜像）
+docker compose logs -f server             # 查看日志
+# 发布：打 tag vX.Y.Z → Actions 自动构建 4 平台二进制 + GHCR 镜像 → Release
 ```
+
+镜像同时包含 `sounding-server` 与 `sounding-agent`；`SOUNDING_AGENT_TOKEN` 等通过环境变量注入，未设置时主控会自动生成并持久化到 `/data`。
 
 ## 前端
 
-**sounding 自带监控面板**（`web/dashboard/`——Vue 3 + Vite + Tailwind，复用 ink 设计 token/组件）：
+sounding 支持两种面板，**推荐直接用真实 ink 主题**（功能完整、零改动）：
+
+| 方案 | 说明 |
+|---|---|
+| **① ink 主题（推荐）** | 挂载 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink) 的 `dist/`。sounding 已实现 ink 全量 RPC 契约（`getRecords` / `queryMetrics` / `getPingMetricStats` / `getPublicSettings`…），**实测首页 + 详情 + 图表零控制台报错** |
+| **② 自研轻量面板** | `web/dashboard/`（Vue 3 + Vite + Tailwind），无 Node 构建时可 Go embed 单二进制交付，适合内网/兜底 |
+
+### 挂载 ink（零配置）
+
+```bash
+# 方式 A：一键脚本自动下载到 /var/lib/sounding/admin
+curl -fsSL .../install.sh | sh -s -- deploy
+
+# 方式 B：源码构建（同源部署务必设 VITE_API_BASE=/api）
+cd komari-theme-ink && VITE_API_BASE=/api bun run build
+./sounding-server -addr :8080 -db sounding.db -static ./komari-theme-ink/dist
+```
+
+| 获取方式 | 命令 |
+|---|---|
+| **一键脚本**（推荐） | `install.sh deploy` 自动下载到 `/var/lib/sounding/admin` |
+| 手动下载 Release | 解压 `ink-build-*.zip` → `dist/` 放到 `./admin` 或 `-static` 指定 |
+| 源码构建 | `cd komari-theme-ink && VITE_API_BASE=/api bun run build` → `-static ./dist` |
+
+**零配置**：ink 默认 API base 为 `/api`，sounding 提供同源 `/api/rpc2` / `/api/public` / `/api/version` 别名——**无需改 ink**。`/api/public` 会下发 ink 的 49 项 `theme_settings` 默认值，开箱即满血。
+
+### 自研面板
 
 ```bash
 cd web/dashboard && bun install && bun run build   # 产物 dist/
 ./sounding-server -static web/dashboard/dist       # 或放到 ./admin
 ```
 
-也可挂载 [komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink) 主题作为替代面板：
-
-| 获取方式 | 命令 |
-|---|---|
-| **一键脚本**（推荐） | `install.sh server` 自动下载到 `/var/lib/sounding/admin` |
-| 手动下载 Release | 解压 `ink-build-*.zip` → `dist/` 放到 `./admin` 或 `-static` 指定 |
-| 源码构建 | `cd komari-theme-ink && bun run build` → `-static ./dist` |
-
-**零配置**：ink 默认 API base 为 `/api`，sounding 已提供同源 `/api/rpc2` 别名——**无需改 ink**。
+> **差异与复刻路线**：自研面板是 ink 的轻量降级方案（约 1.1k 行 vs ink 26k 行）。完整的差异清单、优先级（P0/P1/P2）与复刻建议见 **[docs/ink-parity.md](docs/ink-parity.md)**。
 
 ## 与 ink 前端联调
 
 ```bash
-# 构建 ink（指向 sounding）
-cd komari-theme-ink && VITE_API_BASE=http://localhost:8080 bun run build
-# 主控挂载管理后台
+# 1. 启动主控（带演示数据）
+./sounding-server -addr :8080 -db sounding.db -seed -agent-token demo -admin-token demo-admin
+
+# 2. 构建 ink（同源部署用 /api；跨域调试才填 http://localhost:8080）
+cd komari-theme-ink && VITE_API_BASE=/api bun run build
+
+# 3. 挂载
 ./sounding-server -addr :8080 -db sounding.db -static ./komari-theme-ink/dist
-# → http://localhost:8080 即完整面板（初始化/设置/健康检查/数据新鲜度全通）
+# → http://localhost:8080 即完整面板（首页卡片/详情图表/健康检查/数据新鲜度全通）
 ```
+
+**已验证的 ink RPC 方法**（`internal/api/rpc_komari.go`）：
+
+| 方法 | 用途 |
+|---|---|
+| `common:getNodes` / `getNodesLatestStatus` | 节点列表 + 最新状态 |
+| `common:getNodeRecentStatus` | 最近状态（支持 `{uuid, limit}`） |
+| `common:getRecords` | 负载 / Ping 历史（`type=load\|ping`） |
+| `public:getPublicSettings` | 站点设置 + 49 项 `theme_settings` |
+| `public:getPublicPingTasks` | 探针任务摘要（延迟/丢包/P50/P99） |
+| `public:listMetricDefinitions` / `queryMetrics` / `getPingMetricStats` | 指标目录 / 时序查询 / Ping 统计 |
+| `public:getNodesInformation` / `getClientRecentRecords` / `getRecordsByUUID` / `getPingRecords` / `getMe` | 公开别名 |
+| `rpc.getVersion` / `rpc.ping` / `rpc.getMethods` / `rpc.getHelp` | 内置方法 |
 
 ## 运维与安全
 

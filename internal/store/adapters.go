@@ -410,7 +410,7 @@ func (s *Store) AdminUpsertNode(n api.Client) error {
 
 // AdminProbeTasks 管理视角探针任务。
 func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
-	rows, err := s.db.Query(`SELECT id, client, target, name, type, enabled FROM probe_tasks ORDER BY client, id`)
+	rows, err := s.db.Query(`SELECT id, client, target, name, type, interval_sec, enabled FROM probe_tasks ORDER BY client, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -419,7 +419,7 @@ func (s *Store) AdminProbeTasks() ([]api.AdminProbe, error) {
 	for rows.Next() {
 		var p api.AdminProbe
 		var enabled int
-		if err := rows.Scan(&p.ID, &p.Client, &p.Target, &p.Name, &p.Type, &enabled); err != nil {
+		if err := rows.Scan(&p.ID, &p.Client, &p.Target, &p.Name, &p.Type, &p.IntervalSec, &enabled); err != nil {
 			return nil, err
 		}
 		p.Enabled = enabled == 1

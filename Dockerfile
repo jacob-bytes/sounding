@@ -1,10 +1,11 @@
-# sounding-server 多阶段构建（内置 ink 监控面板）
+# sounding 多阶段构建（主控 + Agent 二进制，内置 ink 监控面板）
 FROM golang:1.25-alpine AS build
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/sounding-server ./cmd/server
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/sounding-server ./cmd/server && \
+    CGO_ENABLED=0 go build -ldflags="-s -w" -o /out/sounding-agent ./cmd/agent
 
 # 可选：构建时拉取 ink 监控面板（ARG 控制，离线构建可跳过）
 FROM alpine:3.20 AS ink
@@ -21,6 +22,7 @@ RUN if [ "$INSTALL_INK" = "1" ]; then \
 FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=build /out/sounding-server /usr/local/bin/sounding-server
+COPY --from=build /out/sounding-agent /usr/local/bin/sounding-agent
 COPY --from=ink /admin /admin
 EXPOSE 8080
 VOLUME ["/data"]

@@ -153,6 +153,8 @@ func main() {
 	}
 
 	h := api.NewHandler(st)
+	h.SetVersion(version.Version)
+	h.SetPublicSettings(func() map[string]any { return api.PublicSettings() })
 	agentH := api.NewAgentEndpoint(st, *agentToken)
 	adminH := api.NewAdminEndpoint(st, *adminToken)
 	adminH.SetStatusProvider(func() any { m, _ := st.LatestStatus(); return m })
@@ -222,16 +224,19 @@ func main() {
 			case "/me":
 				writeJSON(w, map[string]any{"logged_in": false})
 			case "/public":
-				publicSettingsHandler(w, nil)
+				writeJSON(w, api.PublicSettingsResponse())
 			case "/version":
-				writeJSON(w, map[string]any{"version": version.Version})
+				// ink 的 REST 契约：{status, data:{version, hash}}
+				writeJSON(w, map[string]any{"status": "success", "data": map[string]any{"version": version.Version, "hash": version.Commit}})
 			}
 		})
 	}
 	// /api/* 与根路径同实现（ink 默认 base=/api）
 	mux.HandleFunc("/api/me", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"logged_in": false}) })
-	mux.HandleFunc("/api/public", publicSettingsHandler)
-	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, map[string]any{"version": version.Version}) })
+	mux.HandleFunc("/api/public", func(w http.ResponseWriter, _ *http.Request) { writeJSON(w, api.PublicSettingsResponse()) })
+	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, map[string]any{"status": "success", "data": map[string]any{"version": version.Version, "hash": version.Commit}})
+	})
 	// 监控面板（ink 前端构建产物）——-static 指定，或自动探测 ./admin、/var/lib/sounding/admin
 	if *staticDir == "" {
 		for _, cand := range []string{"./admin", "/var/lib/sounding/admin"} {
@@ -262,28 +267,6 @@ func main() {
 }
 
 var alertMgr *alert.Manager
-
-// publicSettingsHandler ink 站点公开设置（含 WS 通道开关）。
-func publicSettingsHandler(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, map[string]any{
-		"status": "success",
-		"data": map[string]any{
-			"theme_settings": map[string]any{
-				"rpcTransportMode": "websocket", // ink 走 WS 实时通道
-			},
-			"record_enabled":         true,
-			"sitename":               "sounding",
-			"description":            "sounding",
-			"custom_body":            "",
-			"custom_head":            "",
-			"allow_cors":             false,
-			"disable_password_login": true,
-			"oauth_enable":           false,
-			"oauth_provider":         nil,
-			"private_site":           false,
-		},
-	})
-}
 
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
