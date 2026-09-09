@@ -12,17 +12,19 @@
 
 | 项 | 值 |
 |---|---|
-| ink 源码仓库 | `../komari-theme-ink`（[GitHub](https://github.com/jacob-bytes/komari-theme-ink)） |
-| 源码 commit / 版本 | `d128cf0` / `v0.6.8`（2026-09-10） |
-| 验证用 Release 产物 | `ink-build-30c4eff.zip`（`v0.6.7`，`dist` 内置 `VITE_API_BASE=/api`） |
+| ink 源码仓库 | [jacob-bytes/komari-theme-ink](https://github.com/jacob-bytes/komari-theme-ink)（远端 `main`） |
+| 远端 main commit / 版本 | `d128cf0` / `v0.6.8`（2026-09-09T16:17:47Z） |
+| 本地源码一致性 | 本地 HEAD == 远端 main；`diff -rq src` **0 差异**（已核对） |
+| 验证用 Release 产物 | [`ink-build-d128cf0.zip`](https://github.com/jacob-bytes/komari-theme-ink/releases/download/v0.6.8/ink-build-d128cf0.zip)（v0.6.8 官方 Release，`dist` 内置 `VITE_API_BASE=/api`） |
 | 实测结果 | sounding-server 挂载该产物：首页 2 卡片、详情 7 图表 canvas、**0 控制台错误** |
 
-> ⚠️ **不要用 ink 仓库里的 `dist/` 直接测试**：本地开发构建可能把 `VITE_API_BASE` 烘焙成 `http://localhost:8100`（我第一次就踩了这个坑），需要替换或重新构建。**官方 Release zip 是 `/api` 同源，零配置可用。**
+> ⚠️ **两个坑**：
+> 1. **不要用 ink 仓库里的 `dist/` 直接测试**——本地开发构建可能把 `VITE_API_BASE` 烘焙成 `http://localhost:8100`（第一版分析就踩了这个坑）。官方 Release zip 是 `/api` 同源，零配置可用。
+> 2. **源码 main ≠ 已发布 Release**——Release 由 tag 触发构建，可能落后 main。以 Release 为「用户实际安装到」的基线，以 main 为「最新源码」的基线。
 >
-> 远端可能领先本地，动手前先校准：
+> 动手前先校准（HTTPS 可用，无需 SSH）：
 > ```bash
-> cd ../komari-theme-ink && git fetch origin && git log --oneline -1 origin/main
-> sh ../sounding/scripts/ink-inventory.sh ../komari-theme-ink   # 打印下方全部基线指标
+> sh ../sounding/scripts/ink-inventory.sh ../komari-theme-ink   # 本地 vs 远端 main + Release 信息
 > ```
 
 ---
@@ -113,7 +115,7 @@ ink 实际调用（`src/utils/rpc.ts`）与 sounding 实现对照：
 | `recordVisitorEvent` | `public:recordVisitorEvent` | ⚠️ 返回 `disabled` |
 | `getClient` | `rpc.getClient` | ✅（空指纹） |
 
-**实测**（官方 Release 产物 `ink-build-30c4eff.zip` / v0.6.7）：`sounding-server -static <release-dist>` + 演示数据，Playwright 加载首页 **2 张节点卡、0 控制台错误**；点击进入详情页 **设备信息 + 7 个图表 canvas、0 错误**。
+**实测**（官方 Release 产物 `ink-build-d128cf0.zip` / v0.6.8）：`sounding-server -static <release-dist>` + 演示数据，Playwright 加载首页 **2 张节点卡、0 控制台错误**；点击进入详情页 **设备信息 + 7 个图表 canvas、0 错误**。
 
 > 注意：只有 **本地开发构建** 的 `dist/` 可能烘焙 `VITE_API_BASE=http://localhost:8100`；官方 Release zip 与 `install.sh` 下载的产物都是同源 `/api`，无需修改。若自建，务必 `VITE_API_BASE=/api bun run build`。
 

@@ -17,7 +17,7 @@
 | 认证 | JWT（HS256）+ Admin Token 双轨；空 token/密钥自动随机生成并持久化 |
 | 存储 | SQLite（WAL）· 自动保留清理 + VACUUM |
 | 管理 | 内置 `/admin/` 页面 + REST API + Agent 远程配置下发 |
-| **ink 兼容** | 实现 ink 全量 RPC 契约，**官方 Release 产物零改动接入**（v0.6.7 实测：首页/详情/图表 0 报错） |
+| **ink 兼容** | 实现 ink 全量 RPC 契约，**官方 Release 产物零改动接入**（v0.6.8 实测：首页/详情/图表 0 报错） |
 | 部署 | 单二进制 / Docker / 一键脚本（deploy·agent·docker·status·uninstall）/ 4 平台 Release |
 
 ## 截图

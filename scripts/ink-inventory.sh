@@ -24,11 +24,29 @@ ui=$(find src/components/ui -name '*.vue' 2>/dev/null | wc -l | tr -d ' ')
 keys=$(python3 -c "import json;d=json.load(open('komari-theme.json'));print(len([i for i in d['configuration']['data'] if i.get('type')!='title']))" 2>/dev/null || echo unknown)
 zip=$(ls -t ink-build-*.zip 2>/dev/null | head -1 || echo none)
 
+# 远端 main（HTTPS，无需 SSH）
+remote_sha=$(git ls-remote https://github.com/jacob-bytes/komari-theme-ink.git main 2>/dev/null | awk '{print $1}')
+local_sha=$(git rev-parse HEAD 2>/dev/null || echo unknown)
+if [ -n "$remote_sha" ] && [ "$remote_sha" = "$local_sha" ]; then
+  sync="IN SYNC"
+elif [ -n "$remote_sha" ]; then
+  sync="DRIFT (local HEAD != remote main)"
+else
+  sync="unknown (network unavailable?)"
+fi
+remote_short=$(printf '%s' "$remote_sha" | cut -c1-7)
+
+# GitHub 最新 Release（可选）
+release=$(curl -fsSL --max-time 10 https://api.github.com/repos/jacob-bytes/komari-theme-ink/releases/latest 2>/dev/null \
+  | python3 -c "import sys,json;d=json.load(sys.stdin);a=(d.get('assets') or [{}])[0];print('%s / %s' % (d.get('tag_name','?'), a.get('name','?')))" 2>/dev/null || echo "unknown")
+
 echo "ink baseline"
 echo "  path:        $INK_DIR"
 echo "  branch:      $branch"
 echo "  commit:      $commit ($date)"
 echo "  version:     $version"
+echo "  remote main: ${remote_short:-unknown} ($sync)"
+echo "  release:     $release"
 echo "  vue/ts:      $vue / $ts files"
 echo "  lines:       $lines"
 echo "  components:  $comp (ui atoms: $ui)"
